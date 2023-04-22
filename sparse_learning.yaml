@@ -1,0 +1,19 @@
+name: sparse_learning
+
+channels:
+  - pytorch-nightly
+  - nvidia
+  - conda-forge
+dependencies:
+  - pip
+  - matplotlib
+  - pytorch-nightly::pytorch
+  - pytorch-nightly::torchvision
+  - pytorch-nightly::torchaudio
+  - pytorch-nightly::pytorch-cuda=11.7
+  - conda-forge::pytorch-lightning=1.8.1
+  - pytorch-lightning
+  - pip:
+    - attrs
+
+
