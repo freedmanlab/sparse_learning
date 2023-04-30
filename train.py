@@ -8,18 +8,11 @@ from networks import RNN, LSTM, LSTM_ctx_bottleneck, Classifers
 from tasks import SoftmaxCrossEntropy, ActorCritic
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
-from constants import TASKS
+from constants import TASKS, train_params
 
 
 def main():
 
-    learning_rate: float = 0.002
-    max_train_epochs: int = 12
-    max_test_epochs: int = 20
-    network_hidden_dim: int = 512
-    batch_size: int = 512
-    num_workers: int = 16
-    RL: bool = True
 
     # We will train on a percentage (train_pct) of the tasks in the first round fo training,
     # and the remainder during the second.
@@ -29,10 +22,10 @@ def main():
     print(f"Number of tasks in set 1: {len(train_set_0)}")
     print(f"Number of tasks in set 2: {len(train_set_1)}")
 
-    train_data_v0 = TaskDataset(tasks=train_set_0, n_total_tasks=n, n_batches=200, RL=RL)
-    val_data_v0 = TaskDataset(tasks=train_set_0, n_total_tasks=n, n_batches=10, RL=RL)
-    train_data_v1 = TaskDataset(tasks=train_set_1, n_total_tasks=n, n_batches=200, RL=RL)
-    val_data_v1 = TaskDataset(tasks=train_set_1, n_total_tasks=n, n_batches=10, RL=RL)
+    train_data_v0 = TaskDataset(tasks=train_set_0, n_total_tasks=n, n_batches=200, RL=train_params["RL"])
+    val_data_v0 = TaskDataset(tasks=train_set_0, n_total_tasks=n, n_batches=10, RL=train_params["RL"])
+    train_data_v1 = TaskDataset(tasks=train_set_1, n_total_tasks=n, n_batches=200, RL=train_params["RL"])
+    val_data_v1 = TaskDataset(tasks=train_set_1, n_total_tasks=n, n_batches=10, RL=train_params["RL"])
 
 
     stim_prop = train_data_v0.get_stim_properties()
@@ -46,7 +39,7 @@ def main():
         n_input=stim_prop["n_motion_tuned"] + stim_prop["n_fix_tuned"],
         n_context=stim_prop["n_rule_tuned"],
         n_output=stim_prop["n_motion_dirs"] + 1,
-        hidden_dim=network_hidden_dim,
+        hidden_dim=train_params["network_hidden_dim"],
         # alpha=0.9,
     )
 
@@ -65,10 +58,10 @@ def main():
 
     optim = torch.optim.AdamW(
         [
-            {"params": context_params, "lr": learning_rate, "weight_decay": 0.0},
-            {"params": non_context_params, "lr": learning_rate, "weight_decay": 0.0},
+            {"params": context_params, "lr": train_params["learning_rate"], "weight_decay": 0.0},
+            {"params": non_context_params, "lr": train_params["learning_rate"], "weight_decay": 0.0},
         ],
-        lr=learning_rate, weight_decay=0.00,
+        lr=train_params["learning_rate"], weight_decay=0.00,
     )
     task = SoftmaxCrossEntropy(
         network=network,
@@ -77,12 +70,12 @@ def main():
         n_logits=stim_prop["n_motion_dirs"] + 1,
     )
 
-    train_loader = DataLoader(train_data_v0, batch_size=batch_size, num_workers=num_workers)
-    val_loader = DataLoader(val_data_v0, batch_size=batch_size, num_workers=num_workers)
+    train_loader = DataLoader(train_data_v0, batch_size=train_params["batch_size"], num_workers=train_params["num_workers"])
+    val_loader = DataLoader(val_data_v0, batch_size=train_params["batch_size"], num_workers=train_params["num_workers"])
     trainer = pl.Trainer(
         accelerator='gpu',
         devices=1,
-        max_epochs=max_train_epochs,
+        max_epochs=train_params["num_train_epochs"],
         gradient_clip_val=1.0,
     )
     save_task_info(trainer, train_set_0 + train_set_1)
@@ -122,7 +115,7 @@ def main():
     trainer = pl.Trainer(
         accelerator='gpu',
         devices=1,
-        max_epochs=max_test_epochs,
+        max_epochs=train_params["num_test_epochs"],
         gradient_clip_val=1.0,
     )
     trainer.fit(task, train_loader, val_loader)

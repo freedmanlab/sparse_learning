@@ -18,3 +18,13 @@ TASKS = [
     "non_delayed_match_sample",
     "non_delayed_match_category",
 ]
+
+train_params = {
+    "learning_rate": float = 0.002,
+    "num_train_epochs": int = 12,
+    "num_test_epochs": int = 20,
+    "network_hidden_dim": int = 512,
+    "batch_size": int = 512,
+    "num_workers": int = 16,
+    "RL": bool = True,
+}
