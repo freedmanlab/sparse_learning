@@ -2,7 +2,7 @@ import os
 import torch
 import pickle
 import numpy as np
-from typing import Optional
+from typing import List, Optional
 from stimulus import TaskDataset
 from networks import RNN, LSTM, LSTM_ctx_bottleneck, Classifers
 from tasks import SoftmaxCrossEntropy, ActorCritic
@@ -17,18 +17,9 @@ def main():
     # We will train on a percentage (train_pct) of the tasks in the first round fo training,
     # and the remainder during the second.
     # Alternatively, we can specify a holdout_task task for testing
-    train_set_0, train_set_1 = split_train_set(train_pct=0.9, holdout_task=None)
-    n = len(train_set_0) + len(train_set_1)
-    print(f"Number of tasks in set 1: {len(train_set_0)}")
-    print(f"Number of tasks in set 2: {len(train_set_1)}")
+    task_set = create_task_set(train_pct=0.9, holdout_task=None)
 
-    train_data_v0 = TaskDataset(tasks=train_set_0, n_total_tasks=n, n_batches=200, RL=train_params["RL"])
-    val_data_v0 = TaskDataset(tasks=train_set_0, n_total_tasks=n, n_batches=10, RL=train_params["RL"])
-    train_data_v1 = TaskDataset(tasks=train_set_1, n_total_tasks=n, n_batches=200, RL=train_params["RL"])
-    val_data_v1 = TaskDataset(tasks=train_set_1, n_total_tasks=n, n_batches=10, RL=train_params["RL"])
-
-
-    stim_prop = train_data_v0.get_stim_properties()
+    stim_prop = task_set["train0"].get_stim_properties()
     print("Stimulus and network properties")
     for k, v in stim_prop.items():
         if isinstance(v, (int, float)):
@@ -70,29 +61,17 @@ def main():
         n_logits=stim_prop["n_motion_dirs"] + 1,
     )
 
-    train_loader = DataLoader(train_data_v0, batch_size=train_params["batch_size"], num_workers=train_params["num_workers"])
-    val_loader = DataLoader(val_data_v0, batch_size=train_params["batch_size"], num_workers=train_params["num_workers"])
+    train_loader = DataLoader(task_set["train0"], batch_size=train_params["batch_size"], num_workers=train_params["num_workers"])
+    val_loader = DataLoader(task_set["val0"], batch_size=train_params["batch_size"], num_workers=train_params["num_workers"])
     trainer = pl.Trainer(
         accelerator='gpu',
         devices=1,
         max_epochs=train_params["num_train_epochs"],
         gradient_clip_val=1.0,
     )
-    save_task_info(trainer, train_set_0 + train_set_1)
+    save_task_info(trainer, task_set["tasks0"] + task_set["tasks1"])
 
     trainer.fit(task, train_loader, val_loader)
-    """
-    PATH = "/home/masse/work/sparse_learning/lightning_logs/version_52/checkpoints/epoch=11-step=4800.ckpt"
-    checkpoint = torch.load(PATH)
-    print(checkpoint.keys())
-    model_dict = {}
-    for k, v in checkpoint['state_dict'].items():
-        n = k.split(".")
-        n = ".".join(n[1:])
-        model_dict[n] = v
-    network.load_state_dict(model_dict)
-    """
-
 
     """Second round of training"""
 
@@ -103,15 +82,15 @@ def main():
         else:
             trainable_params.append(par)
 
-    optim = torch.optim.Adam(trainable_params, learning_rate)
+    optim = torch.optim.Adam(trainable_params, train_params["learning_rate"])
     task = ActorCritic(
         network=network,
         optim_config=optim,
         n_logits=stim_prop["n_motion_dirs"] + 1,
     )
 
-    train_loader = DataLoader(train_data_v1, batch_size=batch_size, num_workers=16)
-    val_loader = DataLoader(val_data_v1, batch_size=batch_size, num_workers=16)
+    train_loader = DataLoader(task_set["train1"], batch_size=train_params["batch_size"], num_workers=train_params["num_workers"])
+    val_loader = DataLoader(task_set["val1"], batch_size=train_params["batch_size"], num_workers=train_params["num_workers"])
     trainer = pl.Trainer(
         accelerator='gpu',
         devices=1,
@@ -123,10 +102,11 @@ def main():
 def save_task_info(trainer, tasks):
 
     if not os.path.exists(trainer.logger.log_dir):
-        os.mkdir(trainer.logger.log_dir)
+        os.makedirs(trainer.logger.log_dir)
     tasks_fn = trainer.logger.log_dir + "/tasks.pkl"
     print(f"Saving task info to {tasks_fn}")
     tasks_info = {"index": [], "name": [], "target_offset": [], "stim_offset": []}
+
     for n, t in enumerate(tasks):
         tasks_info["index"].append(n)
         tasks_info["name"].append(t[0])
@@ -150,6 +130,21 @@ def get_available_tasks(n: Optional[int] = None):
             else:
                 available_tasks.append([task, target_offset])
     return available_tasks
+
+
+def create_task_set(train_pct: float = 0.9, holdout_task: Optional[List] = None):
+    task_set = {}
+    task_set["tasks0"], task_set["tasks1"] = split_train_set(train_pct=0.9, holdout_task=None)
+    n = len(task_set["tasks0"]) + len(task_set["tasks1"])
+    print(f"Number of tasks in set 1: {len(task_set['tasks0'])}")
+    print(f"Number of tasks in set 2: {len(task_set['tasks1'])}")
+
+    task_set["train0"] = TaskDataset(tasks=task_set['tasks0'], n_total_tasks=n, n_batches=200, RL=train_params["RL"])
+    task_set["val0"] = TaskDataset(tasks=task_set['tasks0'], n_total_tasks=n, n_batches=10, RL=train_params["RL"])
+    task_set["train1"] = TaskDataset(tasks=task_set['tasks1'], n_total_tasks=n, n_batches=200, RL=train_params["RL"])
+    task_set["val1"] = TaskDataset(tasks=task_set['tasks1'], n_total_tasks=n, n_batches=10, RL=train_params["RL"])
+
+    return task_set
 
 def split_train_set(train_pct: Optional[float], holdout_task: Optional[str] = None):
 
