@@ -11,13 +11,14 @@ from torch.utils.data import DataLoader
 from constants import TASKS, train_params
 
 
-def main():
+def main(tasks0: List, tasks1: List):
 
+    val_task = ActorCritic if train_params["RL"] else SoftmaxCrossEntropy
 
     # We will train on a percentage (train_pct) of the tasks in the first round fo training,
     # and the remainder during the second.
     # Alternatively, we can specify a holdout_task task for testing
-    task_set = create_task_set(train_pct=0.9, holdout_task=None)
+    task_set = create_task_set(tasks0, tasks1)
 
     stim_prop = task_set["train0"].get_stim_properties()
     print("Stimulus and network properties")
@@ -33,9 +34,10 @@ def main():
         hidden_dim=train_params["network_hidden_dim"],
         # alpha=0.9,
     )
-
+    """
     for name, par in network.named_parameters():
         print(name, par.size())
+    """
 
     """First round of training"""
 
@@ -45,7 +47,6 @@ def main():
     non_context_params = [
         p for n, p in network.named_parameters() if "context" not in n and "classifier" not in n
     ]
-
 
     optim = torch.optim.AdamW(
         [
@@ -83,7 +84,7 @@ def main():
             trainable_params.append(par)
 
     optim = torch.optim.Adam(trainable_params, train_params["learning_rate"])
-    task = ActorCritic(
+    task = val_task(
         network=network,
         optim_config=optim,
         n_logits=stim_prop["n_motion_dirs"] + 1,
@@ -118,26 +119,43 @@ def save_task_info(trainer, tasks):
     pickle.dump(tasks_info, open(tasks_fn, "wb"))
 
 
-def get_available_tasks(n: Optional[int] = None):
-    available_tasks = []
-    n = n if n is not None else len(TASKS)
-    tasks = np.random.choice(TASKS, size=n, replace=False)
-    for task in tasks:
-        for target_offset in [0, 1, 2, 3, 4, 5, 6, 7]:
-            if "delayed_match" in task:
-                for dir_offset in [0, 1, 2]:
-                    available_tasks.append([task, dir_offset, target_offset])
-            else:
-                available_tasks.append([task, target_offset])
-    return available_tasks
+def generate_task_variants(task):
+    task_variants = []
+    for target_offset in [0, 1, 2, 3, 4, 5, 6, 7]:
+        if "delayed_match" in task:
+            for dir_offset in [0, 1, 2]:
+                task_variants.append([task, dir_offset, target_offset])
+        else:
+            task_variants.append([task, target_offset])
+    return task_variants
 
 
-def create_task_set(train_pct: float = 0.9, holdout_task: Optional[List] = None):
-    task_set = {}
-    task_set["tasks0"], task_set["tasks1"] = split_train_set(train_pct=0.9, holdout_task=None)
+def create_task_set(tasks0: List, tasks1: List, train_pct: float = 0.8):
+
+    task_set = {"tasks0": [], "tasks1": []}
+    print("Task set 0")
+    for t in tasks0:
+        print(t)
+    print("Task set 1")
+    for t in tasks1:
+        print(t)
+
+    for task in TASKS:
+        if task in tasks0 and task not in tasks1:
+            task_set["tasks0"] += generate_task_variants(task)
+        elif task not in tasks0 and task in tasks1:
+            task_set["tasks1"] += generate_task_variants(task)
+        else:
+            t = generate_task_variants(task)
+            n = int(train_pct * len(t))
+            np.random.shuffle(t)
+            task_set["tasks0"] += t[:n]
+            task_set["tasks1"] += t[n:]
+
     n = len(task_set["tasks0"]) + len(task_set["tasks1"])
     print(f"Number of tasks in set 1: {len(task_set['tasks0'])}")
     print(f"Number of tasks in set 2: {len(task_set['tasks1'])}")
+
 
     task_set["train0"] = TaskDataset(tasks=task_set['tasks0'], n_total_tasks=n, n_batches=200, RL=train_params["RL"])
     task_set["val0"] = TaskDataset(tasks=task_set['tasks0'], n_total_tasks=n, n_batches=10, RL=train_params["RL"])
@@ -146,13 +164,12 @@ def create_task_set(train_pct: float = 0.9, holdout_task: Optional[List] = None)
 
     return task_set
 
-def split_train_set(train_pct: Optional[float], holdout_task: Optional[str] = None):
+def split_train_set(tasks0: List, tasks1: List, train_pct: float=0.9):
 
-    # holdout_task can either be a task name or a key work (e.g. "category")
-    assert np.logical_xor(train_pct is None, holdout_task is None), (
-        "Either train_pct must be specified and holdout_task set to None, or vice-versa"
-    )
     available_tasks = get_available_tasks()
+    train_set_0 = []
+
+
     if train_pct is not None:
         n = int(train_pct * len(available_tasks))
         np.random.shuffle(available_tasks)

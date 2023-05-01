@@ -21,10 +21,10 @@ TASKS = [
 
 train_params = {
     "learning_rate": 0.002,
-    "num_train_epochs": 1,
-    "num_test_epochs": 20,
+    "num_train_epochs": 8,
+    "num_test_epochs": 4,
     "network_hidden_dim": 512,
     "batch_size": 512,
     "num_workers": 16,
-    "RL": True,
+    "RL": False,
 }
