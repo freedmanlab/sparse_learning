@@ -140,7 +140,7 @@ def create_task_set(tasks0: List, tasks1: List, train_pct: float = 0.8):
     for t in tasks1:
         print(t)
 
-    for task in TASKS:
+    for task in tasks0 + tasks1:
         if task in tasks0 and task not in tasks1:
             task_set["tasks0"] += generate_task_variants(task)
         elif task not in tasks0 and task in tasks1:
