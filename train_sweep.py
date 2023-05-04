@@ -10,9 +10,14 @@ tasks0 = [
     "task_go",
     "task_go_rt",
     "task_go_delay",
+    "decision_making_rf0",
+    "decision_making_rf1",
 ]
-tasks1 = [t for t in TASKS if t not in tasks0]
 
-tasks1 = ["decision_making_rf0"]
+other_tasks = TASKS[16:]
 
-main(tasks0, tasks1)
+for t in other_tasks:
+    print()
+    print("*******************************************************")
+    print(t)
+    main(tasks0, [t])
