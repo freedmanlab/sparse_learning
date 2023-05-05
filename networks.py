@@ -26,12 +26,12 @@ class BaseModel(torch.jit.ScriptModule):
     exc_inh: torch.Tensor = attr.ib(init=False)
 """
 class BaseModel(torch.jit.ScriptModule):
-    def __init__(self, n_input=36,n_context=200,n_output=9,n_hidden=500,alpha=.8,tau_neuron=100,tau_slow=1000,tau_fast=200,dt=20,exc_fraction=.8,noise_std=.01):
+    def __init__(self, n_input=37,n_context=200,n_output=9,n_hidden=500,alpha=.8,tau_neuron=100,tau_slow=1000,tau_fast=200,dt=20,exc_fraction=.8,noise_std=.01):
         super(BaseModel, self).__init__()
         self.n_input=n_input
         self.n_context=n_context
         self.n_output=n_output
-        self.n_hidden = n_hidden
+        self.n_hidden = int(n_hidden)
         self.alpha=alpha
         self.tau_neuron = tau_neuron 
         self.tau_slow = tau_slow 
@@ -52,11 +52,11 @@ class BaseModel(torch.jit.ScriptModule):
         """
         self.dt_sec = self.dt / 1000.0
         self.alpha_neuron = self.dt / self.tau_neuron
-        self.alpha_x = torch.ones(self.n_hidden) * self.dt / self.tau_slow
-        self.alpha_x[1::2] = torch.ones(self.n_hidden)[1::2] * self.dt / self.tau_fast
-        self.alpha_u = torch.ones(self.n_hidden) * self.dt / self.tau_slow
-        self.alpha_u[1::2] = torch.ones(self.n_hidden)[1::2] * self.dt / self.tau_fast
-        self.U = 0.45 * torch.ones(self.n_hidden)
+        self.alpha_x = torch.ones(size=(self.n_hidden,)) * self.dt / self.tau_slow
+        self.alpha_x[1::2] = torch.ones(size=(self.n_hidden,))[1::2] * self.dt / self.tau_fast
+        self.alpha_u = torch.ones(size=(self.n_hidden,)) * self.dt / self.tau_slow
+        self.alpha_u[1::2] = torch.ones(size=(self.n_hidden,))[1::2] * self.dt / self.tau_fast
+        self.U = 0.45 * torch.ones(size=(self.n_hidden,))
         self.U[1::2] = 0.15
 
         print(torch.cuda.current_device())
@@ -70,8 +70,8 @@ class BaseModel(torch.jit.ScriptModule):
 class RNN(BaseModel):
     def __init__(self,n_input=36,n_context=200,n_output=9,n_hidden=500,alpha=.8,tau_neuron=100,tau_slow=1000,tau_fast=200,dt=20,exc_fraction=.8,noise_std=.01):
         super(RNN, self).__init__()
-        self.h_init = nn.Parameter(torch.zeros(1, self.n_hidden))
-        
+        #self.h_init = nn.Parameter(torch.zeros(1, self.n_hidden))
+        self.h_init = nn.Parameter(torch.zeros((self.n_hidden,)))
         print('self.device)',self.device)
         self.W = torch.ones(size=(self.n_hidden, self.n_hidden))
         w = np.random.gamma(shape=0.1, scale=1.0, size=(self.n_hidden, self.n_hidden))
@@ -109,12 +109,16 @@ class RNN(BaseModel):
         syn_u=syn_u.to(self.device)
         context=context.to(self.device)
         h=h.to(self.device)
+        self.U=self.U.to(self.device)
         self.alpha_x=self.alpha_x.to(self.device)
         # implement both synaptic short term facilitation and depression
         print('syn_u.device',syn_u.device)
         print('syn_x.device',syn_x.device)
         print('self.alpha_x',self.alpha_x.device)
         print(syn_x.shape)
+        print(self.alpha_x.shape)
+        print(syn_u.shape)
+        print(h.shape)
         syn_x += (self.alpha_x * (1 - syn_x) - self.dt_sec * syn_u * syn_x * h)
         syn_u += (self.alpha_x * (self.U - syn_u) + self.dt_sec * self.U * (1 - syn_u) * h)
         syn_x = torch.clip(syn_x, 0.0, 1.0)
