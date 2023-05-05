@@ -36,6 +36,7 @@ def main(tasks: int ,seed: int ,tasks0: List, tasks1: List):
         # alpha=0.9,
     )
     # Define network
+
     #network = LSTM_ctx_bottleneck(
     #    n_input=stim_prop["n_motion_tuned"] + stim_prop["n_fix_tuned"],
     #    n_context=stim_prop["n_rule_tuned"],

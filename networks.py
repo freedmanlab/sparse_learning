@@ -59,6 +59,9 @@ class BaseModel(torch.jit.ScriptModule):
         self.U = 0.45 * torch.ones(self.n_hidden)
         self.U[1::2] = 0.15
 
+        print(torch.cuda.current_device())
+        dev=torch.cuda.current_device() 
+        self.device=f'cuda:{dev}'
         n_exc = int(self.n_hidden) * self.exc_fraction
         self.exc_inh = torch.eye(self.n_hidden).to(self.device)
         self.exc_inh[int(n_exc):] * -1.0
@@ -69,14 +72,14 @@ class RNN(BaseModel):
         super(RNN, self).__init__()
         self.h_init = nn.Parameter(torch.zeros(1, self.n_hidden))
         
-        self.device=self.h_init.device() #'cuda:0'
+        print('self.device)',self.device)
         self.W = torch.ones(size=(self.n_hidden, self.n_hidden))
         w = np.random.gamma(shape=0.1, scale=1.0, size=(self.n_hidden, self.n_hidden))
         self.w_rec = nn.Parameter(data=torch.from_numpy(w))
         self.b_rec = nn.Parameter(torch.zeros(1, self.n_hidden))
 
         self.w_mask = torch.ones((self.n_hidden, self.n_hidden)) - torch.eye(self.n_hidden)
-        self.w_mask.to(device=self.device)
+        self.w_mask.to(self.device)
         self.classifiers = Classifers(n_input=self.n_hidden, n_classifiers=3)
         self.relu = nn.ReLU()
         
@@ -88,9 +91,9 @@ class RNN(BaseModel):
         
     def _init_before_trial(self):
         """Initialize EXC and INH weights, and STDP initial values"""
-        print('self.exc_inh.device',self.exc_inh.device)
+        print('self.exc_inh.device',self.exc_inh.device,'self.device',self.device)
         print('self.w_mask.device',self.w_mask.device)
-        self.W = (self.exc_inh @ self.relu(self.w_rec.float().to(device=self.device))) * self.w_mask.to(device=self.device)
+        self.W = (self.exc_inh @ self.relu(self.w_rec.float().to(device=self.device))) * self.w_mask.to(self.device)
         syn_x = torch.ones(self.n_hidden)
         syn_u = self.U.float() * torch.ones(self.n_hidden)
         #h = copy.copy(self.h_init)
@@ -101,7 +104,17 @@ class RNN(BaseModel):
     def rnn_cell(self, stim, context, h, syn_x, syn_u):
         """Update neural activity and short-term synaptic plasticity values"""
 
+        print(self.device)
+        syn_x=syn_x.to(self.device)
+        syn_u=syn_u.to(self.device)
+        context=context.to(self.device)
+        h=h.to(self.device)
+        self.alpha_x=self.alpha_x.to(self.device)
         # implement both synaptic short term facilitation and depression
+        print('syn_u.device',syn_u.device)
+        print('syn_x.device',syn_x.device)
+        print('self.alpha_x',self.alpha_x.device)
+        print(syn_x.shape)
         syn_x += (self.alpha_x * (1 - syn_x) - self.dt_sec * syn_u * syn_x * h)
         syn_u += (self.alpha_x * (self.U - syn_u) + self.dt_sec * self.U * (1 - syn_u) * h)
         syn_x = torch.clip(syn_x, 0.0, 1.0)
