@@ -127,7 +127,9 @@ class RNN(BaseModel):
 
         # Update the hidden state.
         stim_input = self.input(stim)
-        context_input = self.context(context)
+        context=context.to(self.device)
+        self.context=self.context.to(self.device)
+        context_input = self.context(context).to(self.device)
         h = h * (1 - self.alpha) + self.alpha * (
             stim_input + context_input + h_post @ self.W + self.b_rnn
         ) + self.noise_std * torch.randn(h.size()).to(device=h.device)
