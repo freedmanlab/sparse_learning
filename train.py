@@ -8,7 +8,7 @@ from networks import RNN, RNN_stdp, LSTM, LSTM_ctx_bottleneck, Classifers
 from tasks import SoftmaxCrossEntropy, ActorCritic
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
-from constants import TASKS, train_params
+from constants import TASKS, train_params, model_params
 
 
 def main(tasks: int ,seed: int ,tasks0: List, tasks1: List):
@@ -28,11 +28,11 @@ def main(tasks: int ,seed: int ,tasks0: List, tasks1: List):
         if isinstance(v, (int, float)):
             print(f"{k}: {v}")
 
-    network = RNN_stdp(
+    network = RNN(
         n_input=stim_prop["n_motion_tuned"] + stim_prop["n_fix_tuned"],
         n_context=stim_prop["n_rule_tuned"],
         n_output=stim_prop["n_motion_dirs"] + 1,
-        hidden_dim=train_params["network_hidden_dim"],
+        n_hidden=model_params["hidden_dim"],
         # alpha=0.9,
     )
     # Define network
@@ -50,12 +50,13 @@ def main(tasks: int ,seed: int ,tasks0: List, tasks1: List):
 
     """First round of training"""
 
-    context_params = [
-        p for n, p in network.named_parameters() if "context" in n or "classifier" in n
-    ]
-    non_context_params = [
-        p for n, p in network.named_parameters() if "context" not in n and "classifier" not in n
-    ]
+    print(dir(network.named_parameters()))
+    print(type(network))
+    for n,p in network.named_parameters():
+        print('name',n)
+    print(type(network))
+    context_params = [p for n, p in network.named_parameters() if "context" in n or "classifier" in n]
+    non_context_params = [p for n, p in network.named_parameters() if "context" not in n and "classifier" not in n]
 
     optim = torch.optim.AdamW(
         [

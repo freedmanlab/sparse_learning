@@ -5,9 +5,9 @@ from torch import nn
 import numpy as np
 from typing import List, Literal, Tuple
 
-@attr.s(auto_attribs=True)
+#@attr.s(auto_attribs=True)
+"""
 class BaseModel(torch.jit.ScriptModule):
-
     n_input: int = attr.ib(default=36)
     n_context: int = attr.ib(default=200)
     n_output: int = attr.ib(default=9)
@@ -24,8 +24,25 @@ class BaseModel(torch.jit.ScriptModule):
     alpha_x: float = attr.ib(init=False)
     alpha_u: float = attr.ib(init=False)
     exc_inh: torch.Tensor = attr.ib(init=False)
+"""
+class BaseModel(torch.jit.ScriptModule):
+    def __init__(self, n_input=36,n_context=200,n_output=9,n_hidden=500,alpha=.8,tau_neuron=100,tau_slow=1000,tau_fast=200,dt=20,exc_fraction=.8,noise_std=.01):
+        super(BaseModel, self).__init__()
+        self.n_input=n_input
+        self.n_context=n_context
+        self.n_output=n_output
+        self.n_hidden = n_hidden
+        self.alpha=alpha
+        self.tau_neuron = tau_neuron 
+        self.tau_slow = tau_slow 
+        self.tau_fast=tau_fast
+        self.dt=dt 
+        self.exc_fraction = exc_fraction 
+        self.noise_std=noise_std
 
-    def __attrs_post_init__(self):
+        
+        #self.exc_inh = False
+        #def __attrs_post_init__(self):
         """ Initialize various parameters
         STDP parameters
             x: available neurotransmitter
@@ -36,42 +53,50 @@ class BaseModel(torch.jit.ScriptModule):
         self.dt_sec = self.dt / 1000.0
         self.alpha_neuron = self.dt / self.tau_neuron
         self.alpha_x = torch.ones(self.n_hidden) * self.dt / self.tau_slow
-        self.alpha_x[::2] = torch.ones(self.n_hidden) * self.dt / self.tau_fast
+        self.alpha_x[1::2] = torch.ones(self.n_hidden)[1::2] * self.dt / self.tau_fast
         self.alpha_u = torch.ones(self.n_hidden) * self.dt / self.tau_slow
-        self.alpha_u[1::2] = torch.ones(self.n_hidden) * self.dt / self.tau_fast
+        self.alpha_u[1::2] = torch.ones(self.n_hidden)[1::2] * self.dt / self.tau_fast
         self.U = 0.45 * torch.ones(self.n_hidden)
         self.U[1::2] = 0.15
 
         n_exc = int(self.n_hidden) * self.exc_fraction
-        self.exc_inh = torch.eye(self.n_hidden)
-        self.exc_inh[n_exc:] * -1.0
+        self.exc_inh = torch.eye(self.n_hidden).to(self.device)
+        self.exc_inh[int(n_exc):] * -1.0
 
-
+#@attr.s(auto_attribs=True)
 class RNN(BaseModel):
-    def __init__(self) -> None:
+    def __init__(self,n_input=36,n_context=200,n_output=9,n_hidden=500,alpha=.8,tau_neuron=100,tau_slow=1000,tau_fast=200,dt=20,exc_fraction=.8,noise_std=.01):
         super(RNN, self).__init__()
-
-        self.input = nn.Linear(self.n_input, self.n_hidden, bias=False)
-        self.context = nn.Linear(self.n_context, self.n_hidden, bias=False)
-        self.output = nn.Linear(self.n_hidden, self.n_output)
-
         self.h_init = nn.Parameter(torch.zeros(1, self.n_hidden))
+        
+        self.device=self.h_init.device() #'cuda:0'
+        self.W = torch.ones(size=(self.n_hidden, self.n_hidden))
         w = np.random.gamma(shape=0.1, scale=1.0, size=(self.n_hidden, self.n_hidden))
         self.w_rec = nn.Parameter(data=torch.from_numpy(w))
         self.b_rec = nn.Parameter(torch.zeros(1, self.n_hidden))
 
         self.w_mask = torch.ones((self.n_hidden, self.n_hidden)) - torch.eye(self.n_hidden)
+        self.w_mask.to(device=self.device)
         self.classifiers = Classifers(n_input=self.n_hidden, n_classifiers=3)
         self.relu = nn.ReLU()
-
+        
+        self.input = nn.Linear(self.n_input, self.n_hidden, bias=False)
+        self.context = nn.Linear(self.n_context, self.n_hidden, bias=False)
+        self.output = nn.Linear(self.n_hidden, self.n_output)
+        
+        self.b_rnn = torch.zeros((1,self.n_hidden))#.to(self.device)
+        
     def _init_before_trial(self):
         """Initialize EXC and INH weights, and STDP initial values"""
-        self.W = (self.exc_inh @ self.relu(self.rec)) * self.w_mask
+        print('self.exc_inh.device',self.exc_inh.device)
+        print('self.w_mask.device',self.w_mask.device)
+        self.W = (self.exc_inh @ self.relu(self.w_rec.float().to(device=self.device))) * self.w_mask.to(device=self.device)
         syn_x = torch.ones(self.n_hidden)
-        syn_u = self.U * torch.ones(self.n_hidden)
-        h = copy.deepcopy(self.h_init)
+        syn_u = self.U.float() * torch.ones(self.n_hidden)
+        #h = copy.copy(self.h_init)
+        #h = copy.deepcopy(self.h_init)
 
-        return h, syn_x, syn_u
+        return self.h_init, syn_x, syn_u
     
     def rnn_cell(self, stim, context, h, syn_x, syn_u):
         """Update neural activity and short-term synaptic plasticity values"""
@@ -88,7 +113,7 @@ class RNN(BaseModel):
         context_input = self.context(context)
         h = h * (1 - self.alpha) + self.alpha * (
             stim_input + context_input + h_post @ self.W + self.b_rnn
-        ) + self.noise_std * torch.randn(*h.size()).to(device=h.device)
+        ) + self.noise_std * torch.randn(h.size()).to(device=h.device)
         h = self.relu(h)
 
         return h, syn_x, syn_u
