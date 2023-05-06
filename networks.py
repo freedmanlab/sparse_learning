@@ -1,55 +1,34 @@
-import attr
 import copy
 import torch
 from torch import nn
 import numpy as np
 from typing import List, Literal, Tuple
 
-#@attr.s(auto_attribs=True)
-"""
-class BaseModel(torch.jit.ScriptModule):
-    n_input: int = attr.ib(default=36)
-    n_context: int = attr.ib(default=200)
-    n_output: int = attr.ib(default=9)
-    n_hidden: int = attr.ib(default=500)
-    alpha: float = attr.ib(default=0.8)
-    tau_neuron: float = attr.ib(default=100.0)
-    tau_slow: float = attr.ib(default=1000.0)
-    tau_fast: float = attr.ib(default=200.0)
-    dt: float = attr.ib(default=20.0)
-    exc_fraction: float = attr.ib(default=0.8)
-    noise_std: float = attr.ib(default=0.01)
+class RNN(nn.Module):
 
-    alpha_neuron: float = attr.ib(init=False)
-    alpha_x: float = attr.ib(init=False)
-    alpha_u: float = attr.ib(init=False)
-    exc_inh: torch.Tensor = attr.ib(init=False)
-"""
-class BaseModel(torch.jit.ScriptModule):
-    def __init__(self, n_input=37,n_context=200,n_output=9,n_hidden=500,alpha=.8,tau_neuron=100,tau_slow=1000,tau_fast=200,dt=20,exc_fraction=.8,noise_std=.01):
-        super(BaseModel, self).__init__()
-        self.n_input=n_input
-        self.n_context=n_context
-        self.n_output=n_output
-        self.n_hidden = int(n_hidden)
-        self.alpha=alpha
-        self.tau_neuron = tau_neuron 
-        self.tau_slow = tau_slow 
-        self.tau_fast=tau_fast
-        self.dt=dt 
-        self.exc_fraction = exc_fraction 
-        self.noise_std=noise_std
+    def __init__(self, **kwargs):
+        super(RNN, self).__init__()
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
+        self._initialize_dependents()
+
+        self.h_init = nn.Parameter(torch.zeros(1, self.n_hidden))
+
+        w = np.random.gamma(shape=0.1, scale=1.0, size=(self.n_hidden, self.n_hidden)).astype(np.float32)
+        self.w_rec = nn.Parameter(data=torch.from_numpy(w))
+        self.b_rec = nn.Parameter(torch.zeros(1, self.n_hidden))
+
+        self.w_mask = torch.ones((self.n_hidden, self.n_hidden)) - torch.eye(self.n_hidden)
+        self.classifiers = Classifers(n_input=self.n_hidden, n_classifiers=3)
+        self.relu = nn.ReLU()
         
-        #self.exc_inh = False
-        #def __attrs_post_init__(self):
-        """ Initialize various parameters
-        STDP parameters
-            x: available neurotransmitter
-            u: residual calcium
-            even number neurons: depressing
-            odd number neurons: facilitating
-        """
+        self.input = nn.Linear(self.n_stimulus, self.n_hidden, bias=False)
+        self.context = nn.Linear(self.n_context, self.n_hidden, bias=False)
+        self.output = nn.Linear(self.n_hidden, self.n_output)
+
+    def _initialize_dependents(self):
+
         self.dt_sec = self.dt / 1000.0
         self.alpha_neuron = self.dt / self.tau_neuron
         self.alpha_x = torch.ones(size=(self.n_hidden,)) * self.dt / self.tau_slow
@@ -59,94 +38,59 @@ class BaseModel(torch.jit.ScriptModule):
         self.U = 0.45 * torch.ones(size=(self.n_hidden,))
         self.U[1::2] = 0.15
 
-        print(torch.cuda.current_device())
-        dev=torch.cuda.current_device() 
-        self.device=f'cuda:{dev}'
-        n_exc = int(self.n_hidden) * self.exc_fraction
-        self.exc_inh = torch.eye(self.n_hidden).to(self.device)
-        self.exc_inh[int(n_exc):] * -1.0
-
-#@attr.s(auto_attribs=True)
-class RNN(BaseModel):
-    def __init__(self,n_input=36,n_context=200,n_output=9,n_hidden=500,alpha=.8,tau_neuron=100,tau_slow=1000,tau_fast=200,dt=20,exc_fraction=.8,noise_std=.01):
-        super(RNN, self).__init__()
-        #self.h_init = nn.Parameter(torch.zeros(1, self.n_hidden))
-        self.h_init = nn.Parameter(torch.zeros((self.n_hidden,)))
-        print('self.device)',self.device)
-        self.W = torch.ones(size=(self.n_hidden, self.n_hidden))
-        w = np.random.gamma(shape=0.1, scale=1.0, size=(self.n_hidden, self.n_hidden))
-        self.w_rec = nn.Parameter(data=torch.from_numpy(w))
-        self.b_rec = nn.Parameter(torch.zeros(1, self.n_hidden))
-
-        self.w_mask = torch.ones((self.n_hidden, self.n_hidden)) - torch.eye(self.n_hidden)
-        self.w_mask.to(self.device)
-        self.classifiers = Classifers(n_input=self.n_hidden, n_classifiers=3)
-        self.relu = nn.ReLU()
-        
-        self.input = nn.Linear(self.n_input, self.n_hidden, bias=False)
-        self.context = nn.Linear(self.n_context, self.n_hidden, bias=False)
-        self.output = nn.Linear(self.n_hidden, self.n_output)
-        
-        self.b_rnn = torch.zeros((1,self.n_hidden))#.to(self.device)
+        n_exc = int(self.n_hidden * self.exc_fraction)
+        self.exc_inh = torch.eye(self.n_hidden, dtype=torch.float32)
+        self.exc_inh[n_exc:] *= -1.0
         
     def _init_before_trial(self):
         """Initialize EXC and INH weights, and STDP initial values"""
-        print('self.exc_inh.device',self.exc_inh.device,'self.device',self.device)
-        print('self.w_mask.device',self.w_mask.device)
-        self.W = (self.exc_inh @ self.relu(self.w_rec.float().to(device=self.device))) * self.w_mask.to(self.device)
-        syn_x = torch.ones(self.n_hidden)
-        syn_u = self.U.float() * torch.ones(self.n_hidden)
-        #h = copy.copy(self.h_init)
-        #h = copy.deepcopy(self.h_init)
+        device = self.w_rec.device
+        self.U = self.U.to(device)
+        self.alpha_x = self.alpha_x.to(device)
+        self.alpha_u = self.alpha_u.to(device)
+        self.W = (self.exc_inh.to(device) @ self.relu(self.w_rec)) * self.w_mask.to(device)
+        syn_x = torch.ones(self.batch_size, self.n_hidden).to(device)
+        syn_u = self.U * torch.ones(self.batch_size, self.n_hidden).to(device)
 
         return self.h_init, syn_x, syn_u
-    
-    def rnn_cell(self, stim, context, h, syn_x, syn_u):
+
+    # @torch.jit.script_method
+    def rnn_cell(
+            self,
+            stim: torch.Tensor,
+            context: torch.Tensor,
+            h: torch.Tensor,
+            syn_x: torch.Tensor,
+            syn_u: torch.Tensor,
+        ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Update neural activity and short-term synaptic plasticity values"""
 
-        print(self.device)
-        syn_x=syn_x.to(self.device)
-        syn_u=syn_u.to(self.device)
-        context=context.to(self.device)
-        h=h.to(self.device)
-        self.U=self.U.to(self.device)
-        self.alpha_x=self.alpha_x.to(self.device)
-        # implement both synaptic short term facilitation and depression
-        print('syn_u.device',syn_u.device)
-        print('syn_x.device',syn_x.device)
-        print('self.alpha_x',self.alpha_x.device)
-        print(syn_x.shape)
-        print(self.alpha_x.shape)
-        print(syn_u.shape)
-        print(h.shape)
-        syn_x += (self.alpha_x * (1 - syn_x) - self.dt_sec * syn_u * syn_x * h)
-        syn_u += (self.alpha_x * (self.U - syn_u) + self.dt_sec * self.U * (1 - syn_u) * h)
+        syn_x = syn_x + (self.alpha_x * (1 - syn_x) - self.dt_sec * syn_u * syn_x * h)
+        syn_u = syn_u + (self.alpha_u * (self.U - syn_u) + self.dt_sec * self.U * (1 - syn_u) * h)
         syn_x = torch.clip(syn_x, 0.0, 1.0)
         syn_u = torch.clip(syn_u, 0.0, 1.0)
         h_post = syn_u * syn_x * h
 
         # Update the hidden state.
         stim_input = self.input(stim)
-        context=context.to(self.device)
-        self.context=self.context.to(self.device)
-        context_input = self.context(context).to(self.device)
-        h = h * (1 - self.alpha) + self.alpha * (
-            stim_input + context_input + h_post @ self.W + self.b_rnn
+        context_input = self.context(context)
+        h = h * (1 - self.alpha_neuron) + self.alpha_neuron * (
+            stim_input + context_input + h_post @ self.W + self.b_rec
         ) + self.noise_std * torch.randn(h.size()).to(device=h.device)
         h = self.relu(h)
 
         return h, syn_x, syn_u
 
-    @torch.jit.script_method
+    # @torch.jit.script_method
     def forward(
         self,
-        stim_input: torch.Tensor,
+        stimulus: torch.Tensor,
         context: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
         h, syn_x, syn_u = self._init_before_trial()
 
-        inputs = stim_input.unbind(1)
+        inputs = stimulus.unbind(1)
         ctx = context.unbind(1)
         outputs = torch.jit.annotate(List[torch.Tensor], [])
         activity = torch.jit.annotate(List[torch.Tensor], [])
