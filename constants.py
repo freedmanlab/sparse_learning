@@ -37,8 +37,16 @@ train_params = {
     "batch_size": 512,
     "num_workers": 16,
     "RL": False,
+    "seed": 42,
 }
 
 model_params = {
-    "hidden_dim": 512,
+    "n_hidden": 512,
+    "tau_neuron": 100.0,
+    "tau_slow": 1000.0,
+    "tau_fast": 200.0,
+    "dt": 20.0,
+    "exc_fraction": 0.8,
+    "noise_std": 0.01,
 }
+
