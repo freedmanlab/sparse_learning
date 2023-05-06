@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 class TaskDataset(Dataset):
 
     def __init__(self, tasks: List, n_total_tasks: int, n_batches: int, RL: bool = False):
-        self.stim = Stimulus(task_set=tasks, n_rule_tuned=n_total_tasks, RL=RL)
+        self.stim = Stimulus(task_set=tasks, n_context=n_total_tasks, RL=RL)
         self.n_batches = n_batches
         self.RL = RL
 
@@ -33,7 +33,7 @@ class TaskDataset(Dataset):
 class Stimulus:
 
     task_set: Optional[List] = attr.ib(default=None)
-    n_rule_tuned: int = attr.ib(default=1)
+    n_context: int = attr.ib(default=1)
     n_motion_tuned: int = attr.ib(default=36)
     n_motion_dirs: int = attr.ib(default=8)
     n_fix_tuned: int = attr.ib(default=1)
@@ -53,6 +53,8 @@ class Stimulus:
     pref_motion_dirs: np.ndarray = attr.ib(init=False)
     n_inputs_per_rf: int = attr.ib(init=False)
     tasks: List = attr.ib(init=False)
+    n_output: int = attr.ib(init=False)
+    n_stimulus: int = attr.ib(init=False)
 
     def __attrs_post_init__(self):
 
@@ -69,6 +71,8 @@ class Stimulus:
         )[None, :]
         self.n_inputs_per_rf = self.n_motion_tuned // 2
         self.tasks = self.define_tasks()
+        self.n_stimulus = self.n_motion_tuned + self.n_fix_tuned
+        self.n_output = self.n_motion_dirs + 1  # outputs are all motion directions plus fixation
 
     def define_tasks(self) -> List[List[Any]]:
 
@@ -107,9 +111,9 @@ class Stimulus:
         self.trial_info = {
             "stim_input": np.zeros((self.n_time_steps, self.n_motion_tuned), dtype=np.float32),
             "fix_input": np.zeros((self.n_time_steps, self.n_fix_tuned), dtype=np.float32),
-            "context_input": np.zeros((self.n_time_steps, self.n_rule_tuned), dtype=np.float32),
-            "target": np.zeros((self.n_time_steps, self.n_motion_dirs + 1), dtype=np.float32),
-            "reward_data": np.zeros((self.n_time_steps, self.n_motion_dirs + 1), dtype=np.float32),
+            "context_input": np.zeros((self.n_time_steps, self.n_context), dtype=np.float32),
+            "target": np.zeros((self.n_time_steps, self.n_output), dtype=np.float32),
+            "reward_data": np.zeros((self.n_time_steps, self.n_output), dtype=np.float32),
             "mask": np.ones((self.n_time_steps, 1), dtype=np.float32),
         }
         # mask out dead time
@@ -317,7 +321,7 @@ class Stimulus:
         # add context signal
         self.trial_info["context_input"][:, task_num] += self.tuning_height
 
-        self.trial_info["bottom_up"] = np.concatenate(
+        self.trial_info["stimulus"] = np.concatenate(
             (self.trial_info["stim_input"], self.trial_info["fix_input"]), axis=-1
         )
 
