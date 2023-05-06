@@ -65,7 +65,7 @@ class SoftmaxCrossEntropy(pl.LightningModule):
 
     def training_step(self, batch: Mapping[str, torch.Tensor], batch_idx: int):
 
-        logits, _, class_logits = self.network(batch["bottom_up"], batch["context_input"])
+        logits, _, class_logits = self.network(batch["stimulus"], batch["context_input"])
         loss = self._train_network(logits, batch)
         classifier_loss = self._train_classifiers(class_logits, batch)
 
@@ -74,7 +74,7 @@ class SoftmaxCrossEntropy(pl.LightningModule):
     def validation_step(self, batch: Mapping[str, torch.Tensor], batch_idx: int):
         """ Both have shape (T, B, n_pol) """
 
-        logits, _, class_logits = self.network(batch["bottom_up"], batch["context_input"])
+        logits, _, class_logits = self.network(batch["stimulus"], batch["context_input"])
         logits_idx = torch.argmax(logits, dim=-1, keepdim=False)
         target_idx = torch.argmax(batch["target"], dim=-1, keepdim=False)
 
@@ -117,10 +117,9 @@ class ActorCritic(SoftmaxCrossEntropy):
         val_loss_coeff: float = 0.001,
         entropy_coeff: float = 0.0001,
         n_mask_steps: int = 5,
-
     ):
 
-        logits, value, _ = self.network(batch["bottom_up"], batch["context_input"])
+        logits, value, _ = self.network(batch["stimulus"], batch["context_input"])
         device = logits.device
         B, T, N = logits.size()
 
@@ -159,7 +158,6 @@ class ActorCritic(SoftmaxCrossEntropy):
 
         return loss
 
-
     def training_step(
         self,
         batch: Mapping[str, torch.Tensor],
@@ -168,10 +166,8 @@ class ActorCritic(SoftmaxCrossEntropy):
         val_loss_coeff: float = 0.0001,
         entropy_coeff: float = 0.000,
         n_mask_steps: int = 5,
-
     ):
-
-        logits, value, _ = self.network(batch["bottom_up"], batch["context_input"])
+        logits, value, _ = self.network(batch["stimulus"], batch["context_input"])
         device = logits.device
         B, T, N = logits.size()
 
@@ -209,4 +205,3 @@ class ActorCritic(SoftmaxCrossEntropy):
         self.log("mean_pos_reward", (pos_rewards * mask).sum() / B, on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
-
