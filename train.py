@@ -77,7 +77,7 @@ def main(tasks0: List, tasks1: List):
     task = val_task(
         network=network,
         optim_config=optim,
-        n_logits=stim_prop["n_motion_dirs"] + 1,
+        n_logits=model_params["n_output"],
     )
 
     train_loader = DataLoader(task_set["train1"], batch_size=train_params["batch_size"], num_workers=train_params["num_workers"])
