@@ -32,16 +32,16 @@ TASKS = [
 
 train_params = {
     "learning_rate": 0.002,
-    "num_train_epochs": 8,
+    "num_train_epochs": 4,
     "num_test_epochs": 4,
-    "batch_size": 256,
+    "batch_size": 512,
     "num_workers": 16,
     "RL": False,
     "seed": 42,
 }
 
 model_params = {
-    "n_hidden": 250,
+    "n_hidden": 500,
     "tau_neuron": 100.0,
     "tau_slow": 1000.0,
     "tau_fast": 200.0,
