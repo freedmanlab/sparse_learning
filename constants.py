@@ -34,19 +34,20 @@ train_params = {
     "learning_rate": 0.002,
     "num_train_epochs": 8,
     "num_test_epochs": 4,
-    "batch_size": 512,
+    "batch_size": 64,
     "num_workers": 16,
     "RL": False,
     "seed": 42,
 }
 
 model_params = {
-    "n_hidden": 512,
+    "n_hidden": 5,
     "tau_neuron": 100.0,
     "tau_slow": 1000.0,
     "tau_fast": 200.0,
     "dt": 20.0,
     "exc_fraction": 0.8,
     "noise_std": 0.01,
+    "batch_size": train_params["batch_size"]
 }
 
