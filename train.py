@@ -31,9 +31,6 @@ def main(tasks0: List, tasks1: List):
 
     """First round of training"""
 
-    for n, p in network.named_parameters():
-        print('name', n)
-
     context_params = [p for n, p in network.named_parameters() if "context" in n or "classifier" in n]
     non_context_params = [p for n, p in network.named_parameters() if "context" not in n and "classifier" not in n]
 
@@ -92,13 +89,14 @@ def main(tasks0: List, tasks1: List):
     trainer.fit(task, train_loader, val_loader)
 
 
-def add_model_params(task_set):
+def add_model_params(task_set, verbose=False):
     """Add model params needed from stimulus class"""
     stim_prop = task_set["train0"].get_stim_properties()
-    print("Stimulus and network properties")
-    for k, v in stim_prop.items():
-        if isinstance(v, (int, float)):
-            print(f"{k}: {v}")
+    if verbose:
+        print("Stimulus and network properties")
+        for k, v in stim_prop.items():
+            if isinstance(v, (int, float)):
+                print(f"{k}: {v}")
 
     # Add network params
     for k in ["n_stimulus", "n_context", "n_output"]:
