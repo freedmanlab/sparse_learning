@@ -13,19 +13,33 @@ class RNN(nn.Module):
 
         self._initialize_dependents()
 
-        self.h_init = nn.Parameter(torch.zeros(1, self.n_hidden))
+        s
 
+    def _initialize_weights(self):
+
+        # Initialize recurrent weights, multiply EXC->INH and INH->EXC by 2.0
         w = np.random.gamma(shape=0.1, scale=1.0, size=(self.n_hidden, self.n_hidden)).astype(np.float32)
+        w[self.n_exc:] *= 2.0
+        w[:, self.n_exc:] *= 2.0
         self.w_rec = nn.Parameter(data=torch.from_numpy(w))
+
+        # mask to prevent self-connections (autotapses)
+        self.w_mask = torch.ones((self.n_hidden, self.n_hidden)) - torch.eye(self.n_hidden)
+
+        # initial activity
+        self.h_init = 0.1 * nn.Parameter(torch.zeros(1, self.n_hidden))
+
+        # recurrent unit bias
         self.b_rec = nn.Parameter(torch.zeros(1, self.n_hidden))
 
-        self.w_mask = torch.ones((self.n_hidden, self.n_hidden)) - torch.eye(self.n_hidden)
-        self.classifiers = Classifers(n_input=self.n_hidden, n_classifiers=3)
+        # weights and activations
         self.relu = nn.ReLU()
-        
         self.input = nn.Linear(self.n_stimulus, self.n_hidden, bias=False)
         self.context = nn.Linear(self.n_context, self.n_hidden, bias=False)
         self.output = nn.Linear(self.n_hidden, self.n_output)
+        
+        # predict task variables from network activity, ot used to train network
+        self.classifiers = Classifers(n_input=self.n_hidden, n_classifiers=3)
 
     def _initialize_dependents(self):
 
@@ -38,9 +52,9 @@ class RNN(nn.Module):
         self.U = 0.45 * torch.ones(size=(self.n_hidden,))
         self.U[1::2] = 0.15
 
-        n_exc = int(self.n_hidden * self.exc_fraction)
+        self.n_exc = int(self.n_hidden * self.exc_fraction)
         self.exc_inh = torch.eye(self.n_hidden, dtype=torch.float32)
-        self.exc_inh[n_exc:] *= -1.0
+        self.exc_inh[self.n_exc:] *= -1.0
         
     def _init_before_trial(self):
         """Initialize EXC and INH weights, and STDP initial values"""
@@ -52,7 +66,7 @@ class RNN(nn.Module):
         syn_x = torch.ones(self.batch_size, self.n_hidden).to(device)
         syn_u = self.U * torch.ones(self.batch_size, self.n_hidden).to(device)
 
-        return self.h_init, syn_x, syn_u
+        return copy.copy(self.h_init.to(device)), syn_x, syn_u
 
     # @torch.jit.script_method
     def rnn_cell(
@@ -64,7 +78,6 @@ class RNN(nn.Module):
             syn_u: torch.Tensor,
         ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Update neural activity and short-term synaptic plasticity values"""
-
         syn_x = syn_x + (self.alpha_x * (1 - syn_x) - self.dt_sec * syn_u * syn_x * h)
         syn_u = syn_u + (self.alpha_u * (self.U - syn_u) + self.dt_sec * self.U * (1 - syn_u) * h)
         syn_x = torch.clip(syn_x, 0.0, 1.0)
