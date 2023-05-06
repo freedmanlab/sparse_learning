@@ -12,8 +12,7 @@ class RNN(nn.Module):
             setattr(self, k, v)
 
         self._initialize_dependents()
-
-        s
+        self._initialize_weights()
 
     def _initialize_weights(self):
 
@@ -37,7 +36,7 @@ class RNN(nn.Module):
         self.input = nn.Linear(self.n_stimulus, self.n_hidden, bias=False)
         self.context = nn.Linear(self.n_context, self.n_hidden, bias=False)
         self.output = nn.Linear(self.n_hidden, self.n_output)
-        
+
         # predict task variables from network activity, ot used to train network
         self.classifiers = Classifers(n_input=self.n_hidden, n_classifiers=3)
 

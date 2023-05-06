@@ -41,7 +41,7 @@ train_params = {
 }
 
 model_params = {
-    "n_hidden": 500,
+    "n_hidden": 1000,
     "tau_neuron": 100.0,
     "tau_slow": 1000.0,
     "tau_fast": 200.0,
