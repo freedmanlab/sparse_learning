@@ -11,51 +11,29 @@ from torch.utils.data import DataLoader
 from constants import TASKS, train_params, model_params
 
 
-def main(tasks: int ,seed: int ,tasks0: List, tasks1: List):
+def main(tasks0: List, tasks1: List):
+
+    # initialize random seed
+    np.random.seed(train_params["seed"])
 
     val_task = ActorCritic if train_params["RL"] else SoftmaxCrossEntropy
 
     # We will train on a percentage (train_pct) of the tasks in the first round fo training,
     # and the remainder during the second.
     # Alternatively, we can specify a holdout_task task for testing
-    task_set = create_task_set(seed=seed, tasks=tasks,tasks0=tasks0, tasks1=tasks1)
+    task_set = create_task_set(tasks0=tasks0, tasks1=tasks1)
 
-    
-    stim_prop = task_set["train0"].get_stim_properties()
-    print('stim_prop["n_rule_tuned"]',stim_prop["n_rule_tuned"])
-    print("Stimulus and network properties")
-    for k, v in stim_prop.items():
-        if isinstance(v, (int, float)):
-            print(f"{k}: {v}")
+    # add model params from stimulus class
+    add_model_params(task_set)
 
-    network = RNN(
-        n_input=stim_prop["n_motion_tuned"] + stim_prop["n_fix_tuned"],
-        n_context=stim_prop["n_rule_tuned"],
-        n_output=stim_prop["n_motion_dirs"] + 1,
-        n_hidden=model_params["hidden_dim"],
-        # alpha=0.9,
-    )
-    # Define network
-
-    #network = LSTM_ctx_bottleneck(
-    #    n_input=stim_prop["n_motion_tuned"] + stim_prop["n_fix_tuned"],
-    #    n_context=stim_prop["n_rule_tuned"],
-    #    n_output=stim_prop["n_motion_dirs"] + 1,
-    #    hidden_dim=train_params["network_hidden_dim"],
-    #    # alpha=0.9,
-    #)
-    """
-    for name, par in network.named_parameters():
-        print(name, par.size())
-    """
+    # define network
+    network = RNN(**model_params)
 
     """First round of training"""
 
-    print(dir(network.named_parameters()))
-    print(type(network))
-    for n,p in network.named_parameters():
-        print('name',n)
-    print(type(network))
+    for n, p in network.named_parameters():
+        print('name', n)
+
     context_params = [p for n, p in network.named_parameters() if "context" in n or "classifier" in n]
     non_context_params = [p for n, p in network.named_parameters() if "context" not in n and "classifier" not in n]
 
@@ -70,7 +48,7 @@ def main(tasks: int ,seed: int ,tasks0: List, tasks1: List):
         network=network,
         #clssifier_network=Classifers,
         optim_config=optim,
-        n_logits=stim_prop["n_motion_dirs"] + 1,
+        n_logits=model_params["n_output"],
     )
 
     train_loader = DataLoader(task_set["train0"], batch_size=train_params["batch_size"], num_workers=train_params["num_workers"])
@@ -79,6 +57,8 @@ def main(tasks: int ,seed: int ,tasks0: List, tasks1: List):
         accelerator='gpu',
         max_epochs=train_params["num_train_epochs"],
         gradient_clip_val=1.0,
+        precision=32,
+        devices=1,
     )
     save_task_info(trainer, task_set["tasks0"] + task_set["tasks1"])
 
@@ -104,11 +84,25 @@ def main(tasks: int ,seed: int ,tasks0: List, tasks1: List):
     val_loader = DataLoader(task_set["val1"], batch_size=train_params["batch_size"], num_workers=train_params["num_workers"])
     trainer = pl.Trainer(
         accelerator='gpu',
-        devices=1,
         max_epochs=train_params["num_test_epochs"],
         gradient_clip_val=1.0,
+        precision=32,
+        devices=1,
     )
     trainer.fit(task, train_loader, val_loader)
+
+
+def add_model_params(task_set):
+    """Add model params needed from stimulus class"""
+    stim_prop = task_set["train0"].get_stim_properties()
+    print("Stimulus and network properties")
+    for k, v in stim_prop.items():
+        if isinstance(v, (int, float)):
+            print(f"{k}: {v}")
+
+    # Add network params
+    for k in ["n_stimulus", "n_context", "n_output"]:
+        model_params[k] = stim_prop[k]
 
 def save_task_info(trainer, tasks):
 
@@ -130,7 +124,7 @@ def save_task_info(trainer, tasks):
 
 
 
-def generate_task_variants(task,seed):
+def generate_task_variants(task):
     task_variants = []
     for target_offset in [0, 1, 2, 3, 4, 5, 6, 7]:
         if "delayed_match" in task:
@@ -141,7 +135,7 @@ def generate_task_variants(task,seed):
     return task_variants
 
 
-def create_task_set(seed: int,tasks:int, tasks0: List, tasks1: List, train_pct: float = 0.8):
+def create_task_set(tasks0: List, tasks1: List, train_pct: float = 0.8):
 
     task_set = {"tasks0": [], "tasks1": []}
     print("Task set 0")
@@ -153,37 +147,19 @@ def create_task_set(seed: int,tasks:int, tasks0: List, tasks1: List, train_pct: 
 
     for task in tasks0 + tasks1:
         if task in tasks0 and task not in tasks1:
-            task_set["tasks0"] += generate_task_variants(task,seed)
+            task_set["tasks0"] += generate_task_variants(task)
         elif task not in tasks0 and task in tasks1:
-            task_set["tasks1"] += generate_task_variants(task,seed)
+            task_set["tasks1"] += generate_task_variants(task)
         else:
             t = generate_task_variants(task)
             n = int(train_pct * len(t))
             np.random.shuffle(t)
             task_set["tasks0"] += t[:n]
             task_set["tasks1"] += t[n:]
-    
 
-    #print('task_set',task_set["tasks0"])
-    
-    possible_num_tasks = len(task_set["tasks0"])
-    print('possible_num_tasks: ',possible_num_tasks)
-    rng = np.random.default_rng(10000*seed)
-    available_task_num = np.arange(0,possible_num_tasks)
-    actual_tasks = rng.choice(available_task_num,size=tasks,replace=False)
-    
-    final_task_variants=[]
-    for i in range(len(actual_tasks)):
-        print('actual_tasks[i]',actual_tasks[i])
-        final_task_variants.append(task_set["tasks0"][actual_tasks[i]]) 
-        
-    task_set["tasks0"] = final_task_variants
-    
-    print('SUBSAMPLED task_set',task_set["tasks0"]) 
     n = len(task_set["tasks0"]) + len(task_set["tasks1"])
     print(f"Number of tasks in set 1: {len(task_set['tasks0'])}")
     print(f"Number of tasks in set 2: {len(task_set['tasks1'])}")
-
 
     task_set["train0"] = TaskDataset(tasks=task_set['tasks0'], n_total_tasks=n, n_batches=200, RL=train_params["RL"])
     task_set["val0"] = TaskDataset(tasks=task_set['tasks0'], n_total_tasks=n, n_batches=10, RL=train_params["RL"])
