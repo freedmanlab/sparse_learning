@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 import matplotlib.pyplot as plt
 import pytorch_lightning as pl
 from typing import Any, List, Mapping
@@ -40,7 +41,7 @@ class SoftmaxCrossEntropy(pl.LightningModule):
         )
         loss *= batch["mask"][..., 0]
         loss = loss.mean()
-        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     def _train_classifiers(self, logits: torch.Tensor, batch: Mapping[str, torch.Tensor]):
@@ -65,11 +66,13 @@ class SoftmaxCrossEntropy(pl.LightningModule):
 
     def training_step(self, batch: Mapping[str, torch.Tensor], batch_idx: int):
 
-        logits, _, class_logits = self.network(batch["stimulus"], batch["context_input"])
+        logits, h, class_logits = self.network(batch["stimulus"], batch["context_input"])
         loss = self._train_network(logits, batch)
-        classifier_loss = self._train_classifiers(class_logits, batch)
+        # classifier_loss = self._train_classifiers(class_logits, batch)
+        mean_h = np.mean(np.stack(h.detach().cpu().numpy()))
+        self.log("mean_h", mean_h, on_step=True, on_epoch=True, prog_bar=True)
 
-        return loss + classifier_loss
+        return loss # + classifier_loss
 
     def validation_step(self, batch: Mapping[str, torch.Tensor], batch_idx: int):
         """ Both have shape (T, B, n_pol) """
