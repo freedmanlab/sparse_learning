@@ -32,8 +32,9 @@ TASKS = [
 
 train_params = {
     "learning_rate": 0.002,
-    "num_train_epochs": 4,
-    "num_test_epochs": 4,
+    "weight_decay": 1e-5,
+    "n_full_plasticity_epochs": 2,
+    "n_sparse_plasticity_epochs": 1,
     "batch_size": 512,
     "num_workers": 16,
     "RL": False,
@@ -41,7 +42,7 @@ train_params = {
 }
 
 model_params = {
-    "n_hidden": 1000,
+    "n_hidden": 500,
     "tau_neuron": 100.0,
     "tau_slow": 1000.0,
     "tau_fast": 200.0,

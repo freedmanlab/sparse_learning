@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import matplotlib.pyplot as plt
 import pytorch_lightning as pl
 from typing import Any, List, Mapping
 from torch.distributions.categorical import Categorical

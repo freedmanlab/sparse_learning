@@ -10,12 +10,11 @@ class TaskDataset(Dataset):
     def __init__(
             self,
             tasks: List,
-            n_total_tasks: int,
             n_batches: int,
             n_context: Optional[int] = 200,  # fix this at maximum number of tasks
             RL: bool = False,
     ):
-        n_context = n_total_tasks if n_context is None else n_context
+        self.n_context = n_total_tasks if n_context is None else n_context
         self.stim = Stimulus(task_set=tasks, n_context=n_context, RL=RL)
         self.n_batches = n_batches
         self.RL = RL
@@ -96,7 +95,7 @@ class Stimulus:
                 else:
                     raise Exception('Bad task variant.')
         else:
-            for variant in ["go", "rt_go", "dly_go"]:
+            for variant in ["task_go"]:
                 tasks.append([self.task_go, variant, 0])
 
         return tasks
