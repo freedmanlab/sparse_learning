@@ -5,6 +5,7 @@ import pytorch_lightning as pl
 from typing import Any, List, Mapping
 from torch.distributions.categorical import Categorical
 
+
 class SoftmaxCrossEntropy(pl.LightningModule):
 
     def __init__(
@@ -40,7 +41,7 @@ class SoftmaxCrossEntropy(pl.LightningModule):
         )
         loss *= batch["mask"][..., 0]
         loss = loss.mean()
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("train_loss", loss, on_epoch=True, prog_bar=True)
         return loss
 
     def _train_classifiers(self, logits: torch.Tensor, batch: Mapping[str, torch.Tensor]):
@@ -69,7 +70,7 @@ class SoftmaxCrossEntropy(pl.LightningModule):
         loss = self._train_network(logits, batch)
         # classifier_loss = self._train_classifiers(class_logits, batch)
         mean_h = np.mean(np.stack(h.detach().cpu().numpy()))
-        self.log("mean_h", mean_h, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("mean_h", mean_h, on_epoch=True, prog_bar=True)
 
         return loss # + classifier_loss
 
@@ -90,8 +91,8 @@ class SoftmaxCrossEntropy(pl.LightningModule):
         fix_mask *= batch["mask"][..., 0]
         fix_decision = bools * fix_mask  # (T,B)
         fix_acc = fix_decision.sum() / fix_mask.sum()
-        self.log("dec_acc", decision_acc, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("fix_acc", fix_acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("dec_acc", decision_acc, on_epoch=True, prog_bar=True)
+        self.log("fix_acc", fix_acc, on_epoch=True, prog_bar=True)
 
         # classifier accuracy
         class_list = ["target_offset", "stim_dir0", "stim_dir1"]
@@ -104,7 +105,7 @@ class SoftmaxCrossEntropy(pl.LightningModule):
         # print("XXX", logits_idx.size(), target_idx.size())
         bools = (logits_idx == target_idx).to(torch.float32)  # (T, B)
         class_acc = bools.mean()
-        self.log("class_acc", class_acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("class_acc", class_acc, on_epoch=True, prog_bar=True)
 
         return {"dec_accuracy": decision_acc, "fixation_accuracy": fix_acc, "class_acc": class_acc}
 

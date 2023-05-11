@@ -17,7 +17,7 @@ class Sweep:
         trainer.create_task_loaders(full_plasticity_tasks)
         trainer.train_model(train_params["n_full_plasticity_epochs"])
 
-        for i, tasks in enumerate(sparse_plasticity_tasks):
+        for i, tasks in enumerate(sparse_plasticity_tasks[:1]):
             print("XXX", tasks)
             print(f"****** TRAINING USING SPARSE PLASTICITY, ROUND: {i} ******")
             trainer.define_optimizer(sparse_plasticity=True)

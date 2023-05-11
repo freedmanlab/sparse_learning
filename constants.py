@@ -34,7 +34,7 @@ train_params = {
     "learning_rate": 0.002,
     "weight_decay": 1e-5,
     "n_full_plasticity_epochs": 2,
-    "n_sparse_plasticity_epochs": 1,
+    "n_sparse_plasticity_epochs": 2,
     "batch_size": 512,
     "num_workers": 16,
     "RL": False,
