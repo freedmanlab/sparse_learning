@@ -79,14 +79,23 @@ class Train:
 
     def train_model(self, n_epochs):
         """Train the model and return the saved model and results"""""
+        early_stopping = pl.callbacks.early_stopping.EarlyStopping(
+            monitor='dec_acc',
+            min_delta=0.001,
+            patience=3,
+            verbose=False,
+            mode='max'
+        )
+
         # create PyTorch Lightning Trainer
         trainer = pl.Trainer(
             accelerator='gpu',
             max_epochs=n_epochs,
-            gradient_clip_val=1.0,
+            gradient_clip_val=0.5,
             precision=32,
             devices=1,
             logger=self.logger,
+            callbacks=[early_stopping],
         )
         trainer.fit(self.task, self.train_loader, self.val_loader)
         save_task_info(trainer, self.task_set)

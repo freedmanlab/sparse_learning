@@ -42,7 +42,8 @@ class Sweep:
             self.add_results(full_tasks, None, "full")
 
             for sparse_tasks in sparse_plasticity_tasks:
-                print(f"*********FULL PLASTICITY: {sparse_tasks}")
+                continue
+                print(f"*********SPARSE PLASTICITY: {sparse_tasks}")
                 trainer.network.reset_context_weights()
                 task_codes = create_task_set([sparse_tasks], dir_offset=[0], target_offset=[0])
                 trainer.define_optimizer(sparse_plasticity=True)
@@ -142,13 +143,35 @@ def set_seed(seed: int = 42) -> None:
 
 
 
-full_plasticity_tasks = [[t] for t in TASKS[:3]]
-sparse_plasticity_tasks = TASKS[-3:]
-set_seed(42)
 
-sweep = Sweep(
-    network="LSTM",
-    full_plasticity_tasks=full_plasticity_tasks,
-    sparse_plasticity_tasks=sparse_plasticity_tasks,
-    save_fn="./logs/LSTM_single_v0.pkl",
-)
+"""
+Train with full plasticity with a single task family
+Then, train with sparse plasticity on another task family
+Perform this for all pairs of task families:
+1) 3 seeds, using a single target offset
+2) 3 seeds, using all eight target offset
+"""
+full_plasticity_tasks = [[t] for t in TASKS]
+sparse_plasticity_tasks = TASKS
+
+for n in range(3):
+
+    set_seed(42)
+    sweep = Sweep(
+        network="LSTM",
+        full_plasticity_tasks=full_plasticity_tasks,
+        sparse_plasticity_tasks=sparse_plasticity_tasks,
+        save_fn=f"./logs/LSTM_single_targets1_v{n}.pkl",
+        target_offset=[0],
+    )
+
+for n in range(3):
+
+    set_seed(42)
+    sweep = Sweep(
+        network="LSTM",
+        full_plasticity_tasks=full_plasticity_tasks,
+        sparse_plasticity_tasks=sparse_plasticity_tasks,
+        save_fn=f"./logs/LSTM_single_targets8_v{n}.pkl",
+        target_offset=[0,1,2,3,4,5,6,7],
+    )
