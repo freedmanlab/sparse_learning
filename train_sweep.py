@@ -1,5 +1,10 @@
-from typing import Any, Literal, List, Tuple
-from constants import TASKS, train_params
+from typing import Any, Literal, List, Optional, Sequence, Tuple
+import os
+import pickle
+import torch
+import pandas as pd
+import numpy as np
+from constants import TASKS, model_params, train_params
 from train import Train
 
 class Sweep:
@@ -8,21 +13,80 @@ class Sweep:
         self,
         network: Literal["RNN, LSTM"],
         full_plasticity_tasks: List[List[Any]],
-        sparse_plasticity_tasks: List[List[Any]],
+        sparse_plasticity_tasks: List[Any],
+        logs_fn: Sequence[str] = "./logs/train_sweep/version_0/metrics.csv",
+        save_fn: Sequence[str] = "./logs/results.pkl",
+        dir_offset: Tuple[int] = [0],
+        target_offset: Tuple[int] = [0],
     ):
-        trainer = Train(network=network)
-        trainer.define_optimizer(sparse_plasticity=False)
 
-        print("****** TRAINING USING FULL PLASTICITY ******")
-        trainer.create_task_loaders(full_plasticity_tasks)
-        trainer.train_model(train_params["n_full_plasticity_epochs"])
+        self.logs_fn = logs_fn
+        self.save_fn = save_fn
+        self.results = {
+            "config": {
+                "train_params": train_params,
+                "model_params": model_params,
+                "network": network,
+            }
+        }  # results will be saved here
 
-        for i, tasks in enumerate(sparse_plasticity_tasks[:1]):
-            print("XXX", tasks)
-            print(f"****** TRAINING USING SPARSE PLASTICITY, ROUND: {i} ******")
-            trainer.define_optimizer(sparse_plasticity=True)
-            trainer.create_task_loaders(tasks)
-            trainer.train_model(train_params["n_sparse_plasticity_epochs"])
+        for full_tasks in full_plasticity_tasks:
+            trainer = Train(network=network)
+            trainer.define_optimizer(sparse_plasticity=False)
+
+            print(f"*********FULL PLASTICITY: {full_tasks}")
+            task_codes = create_task_set(full_tasks, dir_offset=dir_offset, target_offset=target_offset)
+            trainer.create_task_loaders(task_codes, n_batches_per_epoch=100)
+            trainer.train_model(train_params["n_full_plasticity_epochs"])
+            # save results
+            self.add_results(full_tasks, None, "full")
+
+            for sparse_tasks in sparse_plasticity_tasks:
+                print(f"*********FULL PLASTICITY: {sparse_tasks}")
+                trainer.network.reset_context_weights()
+                task_codes = create_task_set([sparse_tasks], dir_offset=[0], target_offset=[0])
+                trainer.define_optimizer(sparse_plasticity=True)
+                trainer.create_task_loaders(task_codes, n_batches_per_epoch=20)
+                trainer.train_model(train_params["n_sparse_plasticity_epochs"])
+                # save results
+                self.add_results(full_tasks, [sparse_tasks], "sparse")
+
+    def add_results(
+        self,
+        full_tasks: List[Any],
+        sparse_tasks: Optional[List[Any]] = None,
+        plasticity: Literal["full", "sparse"] = "full",
+    ):
+        assert plasticity == "full" or (
+            plasticity == "sparse" and sparse_tasks is not None, "Must specify sparse tasks"
+        )
+        dec_acc, loss = self.extract_results()
+        full_key = "FULL:" + ",".join(full_tasks)
+        if plasticity == "full":
+            self.results[full_key] = {
+                "accuracy": dec_acc,
+                "loss": loss,
+                "final_accuracy": dec_acc[-1],
+                "final_loss": loss[-1],
+            }
+        else:
+            sparse_key = "SPARSE:" + ",".join(sparse_tasks)
+            self.results[full_key][sparse_key] = {
+                "accuracy": dec_acc,
+                "loss": loss,
+                "final_accuracy": dec_acc[-1],
+                "final_loss": loss[-1],
+            }
+
+        pickle.dump(self.results, open(self.save_fn, "wb"))
+
+    def extract_results(self):
+        df = pd.read_csv(self.logs_fn)
+        dec_acc = df.dec_acc.values
+        dec_acc = dec_acc[~np.isnan(dec_acc)]
+        train_loss = df.train_loss_epoch.values
+        train_loss = train_loss[~np.isnan(train_loss)]
+        return dec_acc, train_loss
 
 def generate_task_variants(task: str, target_offset: Tuple[int], dir_offset: Tuple[int]):
     task_variants = []
@@ -36,8 +100,8 @@ def generate_task_variants(task: str, target_offset: Tuple[int], dir_offset: Tup
 
 def create_task_set(
     task_family: List,
-    target_offset: Tuple[int]=[0, 1, 2, 3, 4, 5, 6, 7],
-    dir_offset: Tuple[int]=[0, 1, 2],
+    target_offset: Tuple[int] = [0, 1, 2, 3, 4, 5, 6, 7],
+    dir_offset: Tuple[int] = [0, 1, 2],
 ):
     task_set = []
     for task in task_family:
@@ -65,13 +129,26 @@ def split_train_set(tasks0: List, tasks1: List, train_pct: float = 0.9):
 
     return train_set_0, train_set_1
 
+def set_seed(seed: int = 42) -> None:
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    # When running on the CuDNN backend, two further options must be set
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    # Set a fixed value for the hash seed
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    print(f"Random seed set as {seed}")
 
-# full plasticity tasks
-full_plasticity_tasks = create_task_set(TASKS[:5])
-sparse_plasticity_tasks = [create_task_set([t]) for t in TASKS[5:]]
+
+
+full_plasticity_tasks = [[t] for t in TASKS[:3]]
+sparse_plasticity_tasks = TASKS[-3:]
+set_seed(42)
 
 sweep = Sweep(
     network="LSTM",
     full_plasticity_tasks=full_plasticity_tasks,
     sparse_plasticity_tasks=sparse_plasticity_tasks,
+    save_fn="./logs/LSTM_single_v0.pkl",
 )
