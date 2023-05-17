@@ -18,7 +18,7 @@ class Train:
 
         # create a dummy loader in order to extract the stimulus properties
         dummy_loader = TaskDataset(tasks=None, n_batches=0, RL=False)
-        self.logger = CSVLogger("logs", name="my_exp_name")
+        self.logger = CSVLogger("logs", name="train_sweep", version=0)
 
         # if network is "LSTM" or "RNN", then initialize the network
         # else, we'll use the network (nn.Module) provided
@@ -60,11 +60,11 @@ class Train:
             n_logits=model_params["n_output"],
         )
 
-    def create_task_loaders(self, task_set: List):
+    def create_task_loaders(self, task_set: List, n_batches_per_epoch: int = 50):
         """Create the trianing and validation stimulus data loader"""
 
         self.task_set = task_set
-        train = TaskDataset(tasks=task_set, n_batches=200, RL=train_params["RL"])
+        train = TaskDataset(tasks=task_set, n_batches=n_batches_per_epoch, RL=train_params["RL"])
         val = TaskDataset(tasks=task_set, n_batches=10, RL=train_params["RL"])
         self.train_loader = DataLoader(
             train,
