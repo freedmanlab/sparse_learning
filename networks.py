@@ -131,6 +131,9 @@ class LSTM(torch.jit.ScriptModule):
 
         self._initialize_weights()
 
+    def reset_context_weights(self):
+        nn.init.xavier_uniform_(self.context, gain=1.0)
+
     def _initialize_weights(self):
 
         super(LSTM, self).__init__()
