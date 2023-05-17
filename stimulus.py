@@ -196,7 +196,7 @@ class Stimulus:
 
         # Determine the strengths of the stimuli in each modality
         stim_contrast0 = np.random.choice(self.contrast_set)
-        stim_contrast1 = np.random.choice(self.contrast_set)
+        stim_contrast1 = np.random.choice(list(set(self.contrast_set) - set([-stim_contrast0])))
         mean_gamma = 0.8 + 0.4 * np.random.rand()
         gamma_s0_rf0 = mean_gamma + stim_contrast0
         gamma_s1_rf0 = mean_gamma - stim_contrast0
@@ -230,10 +230,10 @@ class Stimulus:
             rf = np.random.randint(2)
 
         # calculate stimulus
-        if rf == 0 and "ctx" not in variant:
+        if rf == 0 and "ctx" not in variant and "multisensory" not in variant:
             self.trial_info["stim_input"][stim0_on:stim0_off, :] += gamma_s0_rf0 * self.circ_tuning(stim_dir0, 0)
             self.trial_info["stim_input"][stim1_on:stim1_off, :] += gamma_s1_rf0 * self.circ_tuning(stim_dir1, 0)
-        elif rf == 1 and "ctx" not in variant:
+        elif rf == 1 and "ctx" not in variant and "multisensory" not in variant:
             self.trial_info["stim_input"][stim0_on:stim0_off, :] += gamma_s0_rf1 * self.circ_tuning(stim_dir0, 1)
             self.trial_info["stim_input"][stim1_on:stim1_off, :] += gamma_s1_rf1 * self.circ_tuning(stim_dir1, 1)
         else:
