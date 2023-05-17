@@ -47,7 +47,7 @@ class Stimulus:
     n_time_steps: int = attr.ib(default=100)
     dt: int = attr.ib(default=20)
     dead_time: int = attr.ib(default=100)
-    mask_length: int = attr.ib(default=40)
+    mask_length: int = attr.ib(default=20)
     fix_time: int = attr.ib(default=400)
     delay_times: List[int] = attr.ib(default=[200, 400, 800])
     contrast_set: List[int] = attr.ib(default=[-0.4, -0.2, -0.1, 0.1, 0.2, 0.4])
@@ -174,13 +174,17 @@ class Stimulus:
     def decision_making(
             self,
             variant: Literal[
+                "decision_making",
                 "decision_making_rf0",
                 "decision_making_rf1",
+                "ctx_decision_making",
                 "ctx_decision_making_rf0",
                 "ctx_decision_making_rf1",
                 "decision_making_multisensory",
+                "delayed_decision_making",
                 "delayed_decision_making_rf0",
                 "delayed_decision_making_rf1",
+                "delayed_ctx_decision_making",
                 "delayed_ctx_decision_making_rf0",
                 "delayed_ctx_decision_making_rf1",
                 "delayed_decision_making_multisensory",
@@ -220,11 +224,18 @@ class Stimulus:
             stim1_off = stim0_off
         resp_on = stim1_off
 
+        if "rf0" in variant:
+            rf = 0
+        elif "rf1" in variant:
+            rf = 1
+        else:
+            rf = np.random.randint(2)
+
         # calculate stimulus
-        if "rf0" in variant and "ctx" not in variant:
+        if rf == 0 and "ctx" not in variant:
             self.trial_info["stim_input"][stim0_on:stim0_off, :] += gamma_s0_rf0 * self.circ_tuning(stim_dir0, 0)
             self.trial_info["stim_input"][stim1_on:stim1_off, :] += gamma_s1_rf0 * self.circ_tuning(stim_dir1, 0)
-        elif "rf1" in variant and "ctx" not in variant:
+        elif rf == 1 and "ctx" not in variant:
             self.trial_info["stim_input"][stim0_on:stim0_off, :] += gamma_s0_rf1 * self.circ_tuning(stim_dir0, 1)
             self.trial_info["stim_input"][stim1_on:stim1_off, :] += gamma_s1_rf1 * self.circ_tuning(stim_dir1, 1)
         else:
@@ -234,12 +245,13 @@ class Stimulus:
             self.trial_info["stim_input"][stim1_on:stim1_off, :] += gamma_s1_rf1 * self.circ_tuning(stim_dir1, 1)
 
         # determine target response
-        if "rf0" in variant:
-            target_idx = (target_dir_rf0 + target_offset) % self.n_motion_dirs
-        elif "rf1" in variant:
-            target_idx = (target_dir_rf1 + target_offset) % self.n_motion_dirs
-        elif "multisensory" in variant:
+        if "multisensory" in variant:
             target_idx = (target_dir_sum + target_offset) % self.n_motion_dirs
+        elif rf == 0:
+            target_idx = (target_dir_rf0 + target_offset) % self.n_motion_dirs
+        elif rf == 1:
+            target_idx = (target_dir_rf1 + target_offset) % self.n_motion_dirs
+
 
         self.trial_info["fix_input"][:resp_on, :] += self.tuning_height
         self.trial_info["target"][resp_on:, target_idx] = 1
@@ -256,8 +268,8 @@ class Stimulus:
             variant: Literal[
                 "delayed_match_sample",
                 "delayed_match_category",
-                "non_delayed_match_sample",
-                "non_delayed_match_category",
+                "delayed_match_sample_delayed_response",
+                "delayed_match_category_delayed_response",
             ],
             dir_offset: int = 0,
             target_offset: int = 0
@@ -268,7 +280,7 @@ class Stimulus:
         # motion direction belonging to category 0
         category0 = (np.arange(self.n_motion_dirs // 2) + dir_offset) % self.n_motion_dirs
 
-        if variant in ['delayed_match_sample', 'non_delayed_match_sample']:
+        if variant in ['delayed_match_sample', 'delayed_match_sample_delayed_response']:
             match = np.random.choice([True, False])
             matching_dir = (stim0 + dir_offset) % self.n_motion_dirs
             not_matching_dirs = list(set(np.arange(self.n_motion_dirs)) - set([matching_dir]))
@@ -276,7 +288,7 @@ class Stimulus:
                 stim1 = matching_dir
             else:
                 stim1 = np.random.choice(not_matching_dirs)
-        elif variant in ['delayed_match_category', 'non_delayed_match_category']:
+        elif variant in ['delayed_match_category', 'delayed_match_category_delayed_response']:
             stim1 = np.random.randint(0, self.n_motion_dirs)
             stim0_cat = 0 if stim0 in category0 else 1
             stim1_cat = 0 if stim1 in category0 else 1
@@ -289,21 +301,21 @@ class Stimulus:
         # determine the target response
         match_target_idx = (stim0 + target_offset) % self.n_motion_dirs
         non_match_target_idx = (stim0 + target_offset + self.n_motion_dirs // 2) % self.n_motion_dirs
-        if variant in ['delayed_match_sample', 'delayed_match_category']:
-            target_idx = np.where(match, match_target_idx, non_match_target_idx)
-        elif variant in ['non_delayed_match_sample', 'non_delayed_match_category']:
-            target_idx = np.where(match, non_match_target_idx, match_target_idx)
-        else:
-            raise Exception('Bad variant.')
+        target_idx = np.where(match, match_target_idx, non_match_target_idx)
 
         # Set event times
         stim0_on = self.fix_time // self.dt
-        stim0_off = (self.fix_time + 300) // self.dt
+        stim0_off = (self.fix_time + 200) // self.dt
         stim1_on = stim0_off + np.random.choice(self.delay_times) // self.dt
-        stim1_off = stim1_on + 300 // self.dt
-        resp_on = stim1_off
+        stim1_off = stim1_on + 200 // self.dt
 
-        self.trial_info["fix_input"][:resp_on, :] += self.tuning_height
+        if variant in ['delayed_match_sample', 'delayed_match_category']:
+            resp_on = stim1_on
+            self.trial_info["fix_input"][:, :] += self.tuning_height
+        else:
+            resp_on = stim1_off + np.random.choice([100, 200, 300]) // self.dt
+            self.trial_info["fix_input"][:, :resp_on] += self.tuning_height
+
         self.trial_info["stim_input"][stim0_on:stim0_off, :] += self.circ_tuning(stim0, rf)
         self.trial_info["stim_input"][stim1_on:stim1_off, :] += self.circ_tuning(stim1, rf)
         self.trial_info["target"][resp_on:, target_idx] = 1
