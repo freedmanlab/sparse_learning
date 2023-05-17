@@ -15,10 +15,12 @@ TASKS = [
     "task_go_rt",
     "task_go_delay",
     "decision_making",
-    "ctx_decision_making",
+    "ctx_decision_making_rf0",
+    "ctx_decision_making_rf1",
     "decision_making_multisensory",
     "delayed_decision_making",
-    "delayed_ctx_decision_making",
+    "delayed_ctx_decision_making_rf0",
+    "delayed_ctx_decision_making_rf1",
     "delayed_decision_making_multisensory",
     "delayed_match_sample",
     "delayed_match_category",
@@ -27,10 +29,10 @@ TASKS = [
 ]
 
 train_params = {
-    "learning_rate": 0.002,
+    "learning_rate": 0.001,
     "weight_decay": 1e-5,
-    "n_full_plasticity_epochs": 2,
-    "n_sparse_plasticity_epochs": 5,
+    "n_full_plasticity_epochs": 10,
+    "n_sparse_plasticity_epochs": 20,
     "batch_size": 512,
     "num_workers": 16,
     "RL": False,

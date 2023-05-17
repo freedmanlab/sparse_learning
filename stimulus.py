@@ -177,14 +177,12 @@ class Stimulus:
                 "decision_making",
                 "decision_making_rf0",
                 "decision_making_rf1",
-                "ctx_decision_making",
                 "ctx_decision_making_rf0",
                 "ctx_decision_making_rf1",
                 "decision_making_multisensory",
                 "delayed_decision_making",
                 "delayed_decision_making_rf0",
                 "delayed_decision_making_rf1",
-                "delayed_ctx_decision_making",
                 "delayed_ctx_decision_making_rf0",
                 "delayed_ctx_decision_making_rf1",
                 "delayed_decision_making_multisensory",
@@ -214,7 +212,7 @@ class Stimulus:
 
         # Set event times
         stim0_on = self.fix_time // self.dt
-        if "delay" in variant:
+        if "delayed" in variant:
             stim0_off = stim0_on + 300 // self.dt
             stim1_on = stim0_off + np.random.choice(self.delay_times) // self.dt
             stim1_off = stim1_on + 300 // self.dt
