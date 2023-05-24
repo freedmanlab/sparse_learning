@@ -14,6 +14,7 @@ class SoftmaxCrossEntropy(pl.LightningModule):
             #clssifier_network: pl.LightningModule,
             optim_config: Any,
             n_logits: int,
+            l2_penalty: float,
     ):
 
         pl.LightningModule.__init__(self)
@@ -21,7 +22,8 @@ class SoftmaxCrossEntropy(pl.LightningModule):
         #self.clssifier_network = clssifier_network
         self.optim_config = optim_config
         self.n_logits = n_logits
-        self.classifiter_time = [30, 60]
+        self.l2_penalty = l2_penalty
+        # self.classifiter_time = [30, 60]
 
 
     def configure_optimizers(self):
@@ -67,12 +69,14 @@ class SoftmaxCrossEntropy(pl.LightningModule):
     def training_step(self, batch: Mapping[str, torch.Tensor], batch_idx: int):
 
         logits, h, class_logits = self.network(batch["stimulus"], batch["context_input"])
-        loss = self._train_network(logits, batch)
+        task_loss = self._train_network(logits, batch)
+        acitivity_loss = self.l2_penalty * torch.mean(h ** 2)
+        loss = task_loss + acitivity_loss
         # classifier_loss = self._train_classifiers(class_logits, batch)
         mean_h = np.mean(np.stack(h.detach().cpu().numpy()))
         self.log("mean_h", mean_h, on_epoch=True, prog_bar=True)
 
-        return loss # + classifier_loss
+        return loss
 
     def validation_step(self, batch: Mapping[str, torch.Tensor], batch_idx: int):
         """ Both have shape (T, B, n_pol) """
@@ -94,7 +98,8 @@ class SoftmaxCrossEntropy(pl.LightningModule):
         self.log("dec_acc", decision_acc, on_epoch=True, prog_bar=True)
         self.log("fix_acc", fix_acc, on_epoch=True, prog_bar=True)
 
-        # classifier accuracy
+        """
+        # classifier accuracy        
         class_list = ["target_offset", "stim_dir0", "stim_dir1"]
         class_list = ["target_offset"]
         logits_idx = torch.argmax(
@@ -106,8 +111,8 @@ class SoftmaxCrossEntropy(pl.LightningModule):
         bools = (logits_idx == target_idx).to(torch.float32)  # (T, B)
         class_acc = bools.mean()
         self.log("class_acc", class_acc, on_epoch=True, prog_bar=True)
-
-        return {"dec_accuracy": decision_acc, "fixation_accuracy": fix_acc, "class_acc": class_acc}
+        """
+        return {"dec_accuracy": decision_acc, "fixation_accuracy": fix_acc}
 
 
 class ActorCritic(SoftmaxCrossEntropy):

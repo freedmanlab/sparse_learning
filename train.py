@@ -58,6 +58,7 @@ class Train:
             network=self.network,
             optim_config=optim,
             n_logits=model_params["n_output"],
+            l2_penalty=train_params["l2_penalty"],
         )
 
     def create_task_loaders(self, task_set: List, n_batches_per_epoch: int = 50):
