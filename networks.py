@@ -14,6 +14,9 @@ class RNN(nn.Module):
         self._initialize_dependents()
         self._initialize_weights()
 
+    def reset_context_weights(self):
+        nn.init.xavier_uniform_(self.context.weight, gain=1.0)
+
     def _initialize_weights(self):
 
         # Initialize recurrent weights, multiply EXC->INH and INH->EXC by 2.0
