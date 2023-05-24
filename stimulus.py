@@ -49,7 +49,7 @@ class Stimulus:
     dead_time: int = attr.ib(default=100)
     mask_length: int = attr.ib(default=20)
     fix_time: int = attr.ib(default=400)
-    delay_times: List[int] = attr.ib(default=[200, 400, 800])
+    delay_times: List[int] = attr.ib(default=[400, 600, 800])
     contrast_set: List[int] = attr.ib(default=[-0.4, -0.2, -0.1, 0.1, 0.2, 0.4])
     tuning_height: float = attr.ib(default=2)
     input_noise: float = attr.ib(default=0.1)
@@ -68,11 +68,6 @@ class Stimulus:
         self.motion_dirs = np.linspace(
             0, 2 * np.pi - 2 * np.pi / self.n_motion_dirs, self.n_motion_dirs
         )
-        """
-        self.stimulus_dirs = np.linspace(
-            0, 2 * np.pi - 2 * np.pi / (self.n_motion_tuned // 2), (self.n_motion_tuned // 2)
-        )
-        """
         self.pref_motion_dirs = np.linspace(
             0, 2 * np.pi - 2 * np.pi / (self.n_motion_tuned // 2), (self.n_motion_tuned // 2)
         )[None, :]
@@ -131,22 +126,30 @@ class Stimulus:
 
     def task_go(
             self,
-            variant: Literal["task_go", "task_go_rt", "task_go_delay"],
-            target_offset: int = 0
+            variant: Literal[
+                "task_go",
+                "task_go_rt",
+                "task_go_delay",
+                "task_go_oic",
+                "task_go_oic_rt",
+                "task_go_oic_delay",
+            ],
+            target_offset: int = 0,
+            dir_offset: int = 0,
     ) -> None:
 
         # Event times
-        if variant == 'task_go':
+        if variant == 'task_go' or variant == 'task_go_oic':
             stim_on = np.random.randint(self.fix_time, self.fix_time + 1000) // self.dt
             stim_off = -1
             fix_end = (self.fix_time + 1000) // self.dt
             resp_on = fix_end
-        elif variant == 'task_go_rt':
+        elif variant == 'task_go_rt' or variant == 'task_go_oic_rt':
             stim_on = np.random.randint(self.fix_time, self.fix_time + 1000) // self.dt
             stim_off = -1
             fix_end = self.n_time_steps
             resp_on = stim_on
-        elif variant == 'task_go_delay':
+        elif variant == 'task_go_delay' or variant == 'task_go_oic_delay':
             stim_on = self.fix_time // self.dt
             stim_off = (self.fix_time + 300) // self.dt
             fix_end = stim_off + np.random.choice(self.delay_times) // self.dt
@@ -156,8 +159,17 @@ class Stimulus:
         rf = np.random.randint(2)
         # choose input motion direction
         stim_dir = np.random.randint(0, self.n_motion_dirs)
+
         # target direction based on stim direction and offset
-        target_idx = (stim_dir + target_offset) % self.n_motion_dirs
+        if "oic" in variant:
+            cat0_dirs = (np.arange(self.n_motion_dirs // 2) + dir_offset) % self.n_motion_dirs
+            cat0 = stim_dir in cat0_dirs
+            if cat0:
+                target_idx = target_offset % self.n_motion_dirs
+            else:
+                target_idx = (target_offset + self.n_motion_dirs // 2) % self.n_motion_dirs
+        else:
+            target_idx = (stim_dir + target_offset) % self.n_motion_dirs
 
         # add neural responses
         self.trial_info["stim_input"][stim_on:stim_off, :] += self.circ_tuning(stim_dir, rf)
@@ -170,6 +182,7 @@ class Stimulus:
         self.trial_info["target_offset"] = target_offset
         self.trial_info["stim_dir0"] = stim_dir if rf == 0 else -1
         self.trial_info["stim_dir1"] = stim_dir if rf == 1 else -1
+
 
     def decision_making(
             self,

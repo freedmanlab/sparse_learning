@@ -1,19 +1,12 @@
 
-import numpy as np
-#import tensorflow as tf
-import os
-import matplotlib.pyplot as plt
-
-print("--> Loading parameters...")
-
-"""
-Independent parameters
-"""
 
 TASKS = [
     "task_go",
     "task_go_rt",
     "task_go_delay",
+    "task_go_oic",
+    "task_go_oic_rt",
+    "task_go_oic_delay",
     "decision_making",
     "ctx_decision_making_rf0",
     "ctx_decision_making_rf1",
@@ -29,9 +22,9 @@ TASKS = [
 ]
 
 train_params = {
-    "learning_rate": 0.001,
-    "weight_decay": 1e-5,
-    "n_full_plasticity_epochs": 10,
+    "learning_rate": 0.002,
+    "weight_decay": 0.0,
+    "n_full_plasticity_epochs": 15,
     "n_sparse_plasticity_epochs": 20,
     "batch_size": 512,
     "num_workers": 16,
