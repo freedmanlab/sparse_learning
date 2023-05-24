@@ -83,7 +83,7 @@ class Sweep:
         dec_acc = df.dec_acc.values
         dec_acc = dec_acc[~np.isnan(dec_acc)]
         task_acc = df.task_acc.values
-        task_acc = dec_acc[~np.isnan(task_acc)]
+        task_acc = task_acc[~np.isnan(task_acc)]
         train_loss = df.train_loss_epoch.values
         train_loss = train_loss[~np.isnan(train_loss)]
 
