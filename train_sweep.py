@@ -33,22 +33,21 @@ class Sweep:
         for full_tasks in full_plasticity_tasks:
             trainer = Train(network=network)
             trainer.define_optimizer(sparse_plasticity=False)
-
+            print()
             print(f"*********FULL PLASTICITY: {full_tasks}")
             task_codes = create_task_set(full_tasks, dir_offset=dir_offset, target_offset=target_offset)
-            trainer.create_task_loaders(task_codes, n_batches_per_epoch=100)
-            trainer.train_model(train_params["n_full_plasticity_epochs"])
+            trainer.create_task_loaders(task_codes, n_batches_per_epoch=50)
+            trainer.train_model(train_params["n_full_plasticity_epochs"], patience=4)
             # save results
             self.add_results(full_tasks, None, "full")
 
             for sparse_tasks in sparse_plasticity_tasks:
-                continue
                 print(f"*********SPARSE PLASTICITY: {sparse_tasks}")
                 trainer.network.reset_context_weights()
                 task_codes = create_task_set([sparse_tasks], dir_offset=[0], target_offset=[0])
                 trainer.define_optimizer(sparse_plasticity=True)
-                trainer.create_task_loaders(task_codes, n_batches_per_epoch=20)
-                trainer.train_model(train_params["n_sparse_plasticity_epochs"])
+                trainer.create_task_loaders(task_codes, n_batches_per_epoch=25)
+                trainer.train_model(train_params["n_sparse_plasticity_epochs"], patience=3)
                 # save results
                 self.add_results(full_tasks, [sparse_tasks], "sparse")
 
@@ -154,24 +153,24 @@ Perform this for all pairs of task families:
 full_plasticity_tasks = [[t] for t in TASKS]
 sparse_plasticity_tasks = TASKS
 
-for n in range(3):
+for n in range(0, 2):
 
-    set_seed(42)
+    set_seed(42+n)
     sweep = Sweep(
-        network="LSTM",
+        network="RNN",
         full_plasticity_tasks=full_plasticity_tasks,
         sparse_plasticity_tasks=sparse_plasticity_tasks,
-        save_fn=f"./logs/LSTM_single_targets1_v{n}.pkl",
+        save_fn=f"./logs/RNN_targets1_v{n}.pkl",
         target_offset=[0],
     )
 
-for n in range(3):
+for n in range(0, 2):
 
-    set_seed(42)
+    set_seed(42+n)
     sweep = Sweep(
-        network="LSTM",
+        network="RNN",
         full_plasticity_tasks=full_plasticity_tasks,
         sparse_plasticity_tasks=sparse_plasticity_tasks,
-        save_fn=f"./logs/LSTM_single_targets8_v{n}.pkl",
+        save_fn=f"./logs/RNN_targets8_v{n}.pkl",
         target_offset=[0,1,2,3,4,5,6,7],
     )

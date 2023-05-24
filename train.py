@@ -77,12 +77,12 @@ class Train:
             num_workers=train_params["num_workers"],
         )
 
-    def train_model(self, n_epochs):
+    def train_model(self, n_epochs: int, patience: int = 3):
         """Train the model and return the saved model and results"""""
         early_stopping = pl.callbacks.early_stopping.EarlyStopping(
             monitor='dec_acc',
             min_delta=0.001,
-            patience=3,
+            patience=patience,
             verbose=False,
             mode='max'
         )
