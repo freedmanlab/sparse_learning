@@ -60,23 +60,21 @@ class Sweep:
         assert plasticity == "full" or (
             plasticity == "sparse" and sparse_tasks is not None, "Must specify sparse tasks"
         )
-        dec_acc, loss = self.extract_results()
+        dec_acc, task_acc, loss = self.extract_results()
         full_key = "FULL:" + ",".join(full_tasks)
+        result = {
+            "dec_accuracy": dec_acc,
+            "task_accuracy": task_acc,
+            "loss": loss,
+            "final_dec_accuracy": dec_acc[-1],
+            "final_task_accuracy": task_acc[-1],
+            "final_loss": loss[-1],
+        }
         if plasticity == "full":
-            self.results[full_key] = {
-                "accuracy": dec_acc,
-                "loss": loss,
-                "final_accuracy": dec_acc[-1],
-                "final_loss": loss[-1],
-            }
+            self.results[full_key] = result
         else:
             sparse_key = "SPARSE:" + ",".join(sparse_tasks)
-            self.results[full_key][sparse_key] = {
-                "accuracy": dec_acc,
-                "loss": loss,
-                "final_accuracy": dec_acc[-1],
-                "final_loss": loss[-1],
-            }
+            self.results[full_key][sparse_key] = result
 
         pickle.dump(self.results, open(self.save_fn, "wb"))
 
@@ -84,9 +82,12 @@ class Sweep:
         df = pd.read_csv(self.logs_fn)
         dec_acc = df.dec_acc.values
         dec_acc = dec_acc[~np.isnan(dec_acc)]
+        task_acc = df.task_acc.values
+        task_acc = dec_acc[~np.isnan(task_acc)]
         train_loss = df.train_loss_epoch.values
         train_loss = train_loss[~np.isnan(train_loss)]
-        return dec_acc, train_loss
+
+        return dec_acc, task_acc, train_loss
 
 def generate_task_variants(task: str, target_offset: Tuple[int], dir_offset: Tuple[int]):
     task_variants = []

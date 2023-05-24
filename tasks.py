@@ -70,8 +70,8 @@ class SoftmaxCrossEntropy(pl.LightningModule):
 
         logits, h, class_logits = self.network(batch["stimulus"], batch["context_input"])
         task_loss = self._train_network(logits, batch)
-        acitivity_loss = self.l2_penalty * torch.mean(h ** 2)
-        loss = task_loss + acitivity_loss
+        activity_loss = self.l2_penalty * torch.mean(h ** 2)
+        loss = task_loss + activity_loss
         # classifier_loss = self._train_classifiers(class_logits, batch)
         mean_h = np.mean(np.stack(h.detach().cpu().numpy()))
         self.log("mean_h", mean_h, on_epoch=True, prog_bar=True)
@@ -85,17 +85,20 @@ class SoftmaxCrossEntropy(pl.LightningModule):
         logits_idx = torch.argmax(logits, dim=-1, keepdim=False)
         target_idx = torch.argmax(batch["target"], dim=-1, keepdim=False)
 
-        decision_mask = (target_idx < self.n_logits - 1).to(torch.float32)
-        decision_mask *= batch["mask"][..., 0]
-        bools = (logits_idx == target_idx).to(torch.float32)  # (T, B)
-        bools_decision = bools * decision_mask  # (T,B)
-        decision_acc = bools_decision.sum() / decision_mask.sum()
-
+        correct_action = (logits_idx == target_idx).to(torch.float32)  # (B, T)
         fix_mask = (target_idx == self.n_logits - 1).to(torch.float32)
         fix_mask *= batch["mask"][..., 0]
-        fix_decision = bools * fix_mask  # (T,B)
+        fix_decision = correct_action * fix_mask  # (T,B)
         fix_acc = fix_decision.sum() / fix_mask.sum()
-        task_acc = torch.minimum(fix_acc, decision_acc)
+
+        maintained_fix = torch.maximum(fix_decision, 1 - fix_mask)
+        maintained_fix_trial = (maintained_fix.mean(dim=1, keepdim=True) > 0.9999).to(torch.float32)  # (B, 1)
+
+        decision_mask = (target_idx < self.n_logits - 1).to(torch.float32)
+        decision_mask *= batch["mask"][..., 0]
+        correct_decision = correct_action * decision_mask  # (B,T)
+        decision_acc = correct_decision.sum() / decision_mask.sum()
+        task_acc = (correct_decision * maintained_fix_trial).sum() / decision_mask.sum()
         self.log("dec_acc", decision_acc, on_epoch=True, prog_bar=True)
         self.log("fix_acc", fix_acc, on_epoch=True, prog_bar=True)
         self.log("task_acc", task_acc, on_epoch=True, prog_bar=True)

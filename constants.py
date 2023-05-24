@@ -24,7 +24,7 @@ TASKS = [
 train_params = {
     "learning_rate": 0.001,
     "weight_decay": 0.0,
-    "l2_penalty": 1e-5,
+    "l2_penalty": 1e-4,
     "n_full_plasticity_epochs": 15,
     "n_sparse_plasticity_epochs": 20,
     "batch_size": 512,
