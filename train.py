@@ -81,11 +81,12 @@ class Train:
     def train_model(self, n_epochs: int, patience: int = 3):
         """Train the model and return the saved model and results"""""
         early_stopping = pl.callbacks.early_stopping.EarlyStopping(
-            monitor='dec_acc',
+            monitor='task_acc',
             min_delta=0.001,
             patience=patience,
             verbose=False,
-            mode='max'
+            mode='max',
+            stopping_threshold=0.999,
         )
 
         # create PyTorch Lightning Trainer

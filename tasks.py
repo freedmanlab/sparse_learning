@@ -95,8 +95,10 @@ class SoftmaxCrossEntropy(pl.LightningModule):
         fix_mask *= batch["mask"][..., 0]
         fix_decision = bools * fix_mask  # (T,B)
         fix_acc = fix_decision.sum() / fix_mask.sum()
+        task_acc = torch.minimum(fix_acc, decision_acc)
         self.log("dec_acc", decision_acc, on_epoch=True, prog_bar=True)
         self.log("fix_acc", fix_acc, on_epoch=True, prog_bar=True)
+        self.log("task_acc", task_acc, on_epoch=True, prog_bar=True)
 
         """
         # classifier accuracy        
